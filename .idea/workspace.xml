@@ -1,0 +1,725 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="6c689039-9f30-415b-820d-bb7fce5fc10e" name="Changes" comment="changes for manuscript revision">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/analysed/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/raw/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/environment.yml" beforeDir="false" afterPath="$PROJECT_DIR$/environment.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/analysis_predictability.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/error_analysis_predictability.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/evaluation.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/experiment_parameters.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/experiment_parameters_cloze.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/experiment_parameters_gpt2.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/experiment_parameters_llama.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parameters.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pre_process_stimuli_file.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/reading_components.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/reading_helper_functions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/run_simulations.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/simulate_experiment.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils.py" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;dritlopes&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/dritlopes/OB1-reader.git&quot;,
+    &quot;accountId&quot;: &quot;50a32f8e-0e36-4d29-85c5-5fe44c81e7f3&quot;
+  }
+}</component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 5
+}</component>
+  <component name="ProjectId" id="2KrgfU74XNpFrbTITqridjgSZrh" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "git-widget-placeholder": "<unknown>",
+    "last_opened_file_path": "/Users/adriellilopes/PycharmProjects/OB1-reader",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "two.files.diff.last.used.file": "/Users/adriellilopes/Desktop/scripts_ob1_christophe/simulate_experiment.py",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/data/processed" />
+      <recent name="$PROJECT_DIR$/data/raw" />
+      <recent name="$PROJECT_DIR$/data/model_output" />
+      <recent name="$PROJECT_DIR$/stimuli" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/experiments/predictability/scripts" />
+      <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/data/analysed/_07_09_2023_19-38-25/0.1" />
+      <recent name="$PROJECT_DIR$/data/analysed/_07_09_2023_19-38-25/0.05" />
+      <recent name="$PROJECT_DIR$/data/analysed/_07_09_2023_19-38-25/0.0" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="analysis_predictability" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OB1-reader" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/analysis_predictability.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="error_analysis_predictability" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OB1-reader" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/error_analysis_predictability.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OB1-reader" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="semantic_processing" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="OB1-reader" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/semantic_processing.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="run_simulations.sh" type="ShConfigurationType" temporary="true">
+      <option name="SCRIPT_TEXT" value="" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/src/run_simulations.sh" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="/bin/zsh" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="true" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.main" />
+        <item itemvalue="Python.semantic_processing" />
+        <item itemvalue="Python.error_analysis_predictability" />
+        <item itemvalue="Python.analysis_predictability" />
+        <item itemvalue="Shell Script.run_simulations.sh" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-deb605915726-JavaScript-PY-243.22562.220" />
+        <option value="bundled-python-sdk-0fc6c617c4bd-9a18a617cbe4-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.22562.220" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="6c689039-9f30-415b-820d-bb7fce5fc10e" name="Changes" comment="" />
+      <created>1674738218379</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1674738218379</updated>
+      <workItem from="1688807766406" duration="35534000" />
+      <workItem from="1689433826714" duration="21585000" />
+      <workItem from="1689865749329" duration="1135000" />
+      <workItem from="1689927663182" duration="1911000" />
+      <workItem from="1690270545992" duration="53405000" />
+      <workItem from="1690530163422" duration="7726000" />
+      <workItem from="1690628673973" duration="22407000" />
+      <workItem from="1690813936923" duration="23940000" />
+      <workItem from="1691229934952" duration="6110000" />
+      <workItem from="1691244143704" duration="56000" />
+      <workItem from="1691479903415" duration="7052000" />
+      <workItem from="1692777281488" duration="62945000" />
+      <workItem from="1693384835135" duration="13763000" />
+      <workItem from="1693480291914" duration="35259000" />
+      <workItem from="1693906428274" duration="51276000" />
+      <workItem from="1694952677173" duration="3199000" />
+      <workItem from="1694967422301" duration="175306000" />
+      <workItem from="1696507325636" duration="69367000" />
+      <workItem from="1697540052199" duration="22533000" />
+      <workItem from="1697701010458" duration="8973000" />
+      <workItem from="1698158346632" duration="83000" />
+      <workItem from="1698296627534" duration="21276000" />
+      <workItem from="1698413224778" duration="1594000" />
+      <workItem from="1698663491189" duration="8630000" />
+      <workItem from="1698827126722" duration="10226000" />
+      <workItem from="1698848748767" duration="185000" />
+      <workItem from="1698914743922" duration="31528000" />
+      <workItem from="1699271191558" duration="18698000" />
+      <workItem from="1699793121426" duration="213000" />
+      <workItem from="1699860999531" duration="792000" />
+      <workItem from="1699876088744" duration="8387000" />
+      <workItem from="1700035688013" duration="13341000" />
+      <workItem from="1700146201521" duration="2952000" />
+      <workItem from="1700199607150" duration="10987000" />
+      <workItem from="1700494281801" duration="35953000" />
+      <workItem from="1701330767173" duration="31037000" />
+      <workItem from="1701766252100" duration="834000" />
+      <workItem from="1701878225671" duration="34180000" />
+      <workItem from="1702212397342" duration="1398000" />
+      <workItem from="1702222201651" duration="52298000" />
+      <workItem from="1703761782324" duration="2227000" />
+      <workItem from="1704465201099" duration="7780000" />
+      <workItem from="1704540717148" duration="654000" />
+      <workItem from="1704819159556" duration="268000" />
+      <workItem from="1705917746381" duration="2448000" />
+      <workItem from="1705932987213" duration="2527000" />
+      <workItem from="1706089442199" duration="6178000" />
+      <workItem from="1706532973668" duration="14861000" />
+      <workItem from="1706611617016" duration="1005000" />
+      <workItem from="1706794928847" duration="1466000" />
+      <workItem from="1706868916339" duration="12267000" />
+      <workItem from="1710947047112" duration="3116000" />
+      <workItem from="1711529612527" duration="5024000" />
+      <workItem from="1717581151040" duration="6370000" />
+      <workItem from="1719913060388" duration="9460000" />
+      <workItem from="1720598394750" duration="13821000" />
+      <workItem from="1721384227092" duration="28650000" />
+      <workItem from="1722253762851" duration="18147000" />
+      <workItem from="1723029774729" duration="803000" />
+      <workItem from="1723118951695" duration="1389000" />
+      <workItem from="1723202105329" duration="5785000" />
+      <workItem from="1723451729208" duration="598000" />
+      <workItem from="1726051572312" duration="148000" />
+      <workItem from="1731070461336" duration="5197000" />
+      <workItem from="1732024699984" duration="983000" />
+      <workItem from="1733250461258" duration="881000" />
+      <workItem from="1733251982083" duration="300000" />
+      <workItem from="1733256153055" duration="530000" />
+      <workItem from="1733432652704" duration="315000" />
+      <workItem from="1733495434457" duration="639000" />
+      <workItem from="1733504837178" duration="31000" />
+      <workItem from="1733753032970" duration="37000" />
+      <workItem from="1733753724176" duration="3193000" />
+      <workItem from="1736280152089" duration="13400000" />
+      <workItem from="1736936731283" duration="25044000" />
+      <workItem from="1737971820062" duration="24196000" />
+      <workItem from="1738144044434" duration="13794000" />
+      <workItem from="1740315123686" duration="4601000" />
+      <workItem from="1740401576006" duration="877000" />
+    </task>
+    <task id="LOCAL-00002" summary="updated reading simulation">
+      <created>1676561137977</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1676561137977</updated>
+    </task>
+    <task id="LOCAL-00003" summary="updated reading simulation">
+      <created>1676891915844</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1676891915845</updated>
+    </task>
+    <task id="LOCAL-00004" summary="fixed errors reading simulation">
+      <created>1676907306496</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1676907306496</updated>
+    </task>
+    <task id="LOCAL-00005" summary="added results folder">
+      <created>1676907586824</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1676907586825</updated>
+    </task>
+    <task id="LOCAL-00006" summary="adjusted word excitation parameter">
+      <created>1676988466274</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1676988466274</updated>
+    </task>
+    <task id="LOCAL-00007" summary="adjusted ngram excitation parameter">
+      <created>1676988654206</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1676988654206</updated>
+    </task>
+    <task id="LOCAL-00008" summary="updated stimulus and eye position functions to be more efficient and depend on attention width">
+      <created>1677057967662</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1677057967662</updated>
+    </task>
+    <task id="LOCAL-00009" summary="updated slot matching mechanism to depend on position of fixated word">
+      <created>1677059385318</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1677059385318</updated>
+    </task>
+    <task id="LOCAL-00010" summary="updated slot matching mechanism to depend on position of fixated word">
+      <created>1677059659175</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1677059659175</updated>
+    </task>
+    <task id="LOCAL-00011" summary="updating scripts">
+      <created>1677146023275</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1677146023276</updated>
+    </task>
+    <task id="LOCAL-00012" summary="updated stimulus computation">
+      <created>1677148938962</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1677148938962</updated>
+    </task>
+    <task id="LOCAL-00013" summary="updated threshold update computation that uses predictability">
+      <created>1677155222563</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1677155222563</updated>
+    </task>
+    <task id="LOCAL-00014" summary="updated and fixed functions for efficiency">
+      <created>1677253606709</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1677253606710</updated>
+    </task>
+    <task id="LOCAL-00015" summary="updated and fixed functions for efficiency">
+      <created>1677495214049</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1677495214049</updated>
+    </task>
+    <task id="LOCAL-00016" summary="updated and fixed functions for efficiency">
+      <created>1677495659050</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1677495659050</updated>
+    </task>
+    <task id="LOCAL-00017" summary="minor change in using fixated_first_position_to_eye">
+      <created>1677499668818</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1677499668818</updated>
+    </task>
+    <task id="LOCAL-00018" summary="first update compute_next_eye_position">
+      <created>1677512200788</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1677512200789</updated>
+    </task>
+    <task id="LOCAL-00019" summary="second update compute_next_eye_position">
+      <created>1677575468954</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1677575468954</updated>
+    </task>
+    <task id="LOCAL-00020" summary="fixed bug on word activity cycle update in which activity was decreasing over cycles instead of increasing">
+      <created>1677589446022</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1677589446022</updated>
+    </task>
+    <task id="LOCAL-00021" summary="fixed bug in computation of ngram excitation">
+      <created>1677679608606</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1677679608606</updated>
+    </task>
+    <task id="LOCAL-00022" summary="fixed bug in computation of visual salience for where to move the eyes next">
+      <created>1677765055122</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1677765055123</updated>
+    </task>
+    <task id="LOCAL-00023" summary="tried a few things to improve recog accuracy">
+      <created>1677838668940</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1677838668945</updated>
+    </task>
+    <task id="LOCAL-00024" summary="added preprocessing function to avoid token mismatches and changed inhibition matrix to contain all words, not only words with similar length">
+      <created>1678014033642</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1678014033642</updated>
+    </task>
+    <task id="LOCAL-00025" summary="reverted change in inhibition matrix. Added ReadMe.">
+      <created>1678119301039</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1678119301039</updated>
+    </task>
+    <task id="LOCAL-00026" summary="Added docstrings to functions. Cleaned variables not needed.">
+      <created>1678270930167</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1678270930167</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Moved functions from stimulate_experiment.py to another script, reading_processes.py. Started adding to the function word_recognition.">
+      <created>1678280898276</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1678280898276</updated>
+    </task>
+    <task id="LOCAL-00028" summary="deleted visualise_reading.py and parameters.json. Created evaluation file (still need to be filled).">
+      <created>1678282629008</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1678282629009</updated>
+    </task>
+    <task id="LOCAL-00029" summary="fixed bug on matching slots (words of dissimilar lengths were getting matched)">
+      <created>1678288003639</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1678288003653</updated>
+    </task>
+    <task id="LOCAL-00030" summary="created base for eval code with basic eye movement measures from model's output. Simulation outputs skipped words as well.">
+      <created>1679409313920</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1679409313920</updated>
+    </task>
+    <task id="LOCAL-00031" summary="first commit; load model and get logits for next token prediction">
+      <created>1679921674121</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1679921674121</updated>
+    </task>
+    <task id="LOCAL-00032" summary="first commit; load language model and get logits for next token prediction">
+      <created>1679922497544</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1679922497545</updated>
+    </task>
+    <task id="LOCAL-00033" summary="added requirements">
+      <created>1680010942033</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1680010942033</updated>
+    </task>
+    <task id="LOCAL-00034" summary="fixed error in updating threshold with predictability (shout-out to Michelle who spotted the error)">
+      <created>1680681155039</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1680681155039</updated>
+    </task>
+    <task id="LOCAL-00035" summary="activate_predicted_upcoming_word in reading_components: added gpt-2 top-k predictions as pre-activations in lexicon.&#10;get_stimulus_text in utils.py and pre_process_stimuli_files.py: added PROVO corpus stimulus texts for continuous reading task.">
+      <created>1682945528902</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1682945528902</updated>
+    </task>
+    <task id="LOCAL-00036" summary="implemented PROVO cloze probabilities as pre-activation. Main functions modified: activate_predicted_upcoming_word in reading_components.py; create_pred_file in utils.py.">
+      <created>1683114880535</created>
+      <option name="number" value="00036" />
+      <option name="presentableId" value="LOCAL-00036" />
+      <option name="project" value="LOCAL" />
+      <updated>1683114880535</updated>
+    </task>
+    <task id="LOCAL-00037" summary="fine-tuned the implementation of predictability-based activation. A file is now generated and stored before simulation runs with predictability values from language model and cloze. See create_freq_file in utils.py, check_predictability in reading_helper_functions.py, and activate_predicted_upcoming_words and semantic_processing in reading_components.py">
+      <created>1683277467589</created>
+      <option name="number" value="00037" />
+      <option name="presentableId" value="LOCAL-00037" />
+      <option name="project" value="LOCAL" />
+      <updated>1683277467589</updated>
+    </task>
+    <task id="LOCAL-00038" summary="simulation output is saved as csv file instead of a list of dicts. Implemented various top-k predictions, including only target word.">
+      <created>1685622833275</created>
+      <option name="number" value="00038" />
+      <option name="presentableId" value="LOCAL-00038" />
+      <option name="project" value="LOCAL" />
+      <updated>1685622833275</updated>
+    </task>
+    <task id="LOCAL-00039" summary="fixed bugs in data analysis given errors in PROVO datafile.">
+      <created>1686215675673</created>
+      <option name="number" value="00039" />
+      <option name="presentableId" value="LOCAL-00039" />
+      <option name="project" value="LOCAL" />
+      <updated>1686215675673</updated>
+    </task>
+    <task id="LOCAL-00040" summary="under process of converting the general parts of evaluation notebook into script called from main.py">
+      <created>1686822726707</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1686822726709</updated>
+    </task>
+    <task id="LOCAL-00041" summary="removed lemma parameter; changed main.py so that we could run evaluation on an existent simulation result without having to run simulation first; resolve some TODO's in evaluation.py">
+      <created>1687186760973</created>
+      <option name="number" value="00041" />
+      <option name="presentableId" value="LOCAL-00041" />
+      <option name="project" value="LOCAL" />
+      <updated>1687186760974</updated>
+    </task>
+    <task id="LOCAL-00042" summary="ebaluation.py outputs word-level eye-movement measures from model simulations. Fixed a small mistake on single fixation computation. Merged all word-level measures into one dataframe.">
+      <created>1687351746127</created>
+      <option name="number" value="00042" />
+      <option name="presentableId" value="LOCAL-00042" />
+      <option name="project" value="LOCAL" />
+      <updated>1687351746127</updated>
+    </task>
+    <task id="LOCAL-00043" summary="evaluation.py outputs observed word-level eye-movement measures averaged over participants">
+      <created>1687421394432</created>
+      <option name="number" value="00043" />
+      <option name="presentableId" value="LOCAL-00043" />
+      <option name="project" value="LOCAL" />
+      <updated>1687421394434</updated>
+    </task>
+    <task id="LOCAL-00044" summary="evaluation.py outputs the root-mean-squared-error between eye-movement measures in simulation and those in eye-tracking">
+      <created>1687519318432</created>
+      <option name="number" value="00044" />
+      <option name="presentableId" value="LOCAL-00044" />
+      <option name="project" value="LOCAL" />
+      <updated>1687519318434</updated>
+    </task>
+    <task id="LOCAL-00045" summary="evaluation.py plots predictability in y-axis and eye-movement measure in x-axis">
+      <created>1687526276232</created>
+      <option name="number" value="00045" />
+      <option name="presentableId" value="LOCAL-00045" />
+      <option name="project" value="LOCAL" />
+      <updated>1687526276235</updated>
+    </task>
+    <task id="LOCAL-00046" summary="fixed factor effects with linear mixed model and correlation test">
+      <created>1687845902334</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1687845902335</updated>
+    </task>
+    <task id="LOCAL-00047" summary="simplified eye movement word measure functions; now evaluation outputs word measures with simulation level as well; changed stat test to see if model output can predict human data, instead of fixed factors directly; main.py now can run more than one model set up and evaluate results against each other at once.">
+      <created>1688235479847</created>
+      <option name="number" value="00047" />
+      <option name="presentableId" value="LOCAL-00047" />
+      <option name="project" value="LOCAL" />
+      <updated>1688235479847</updated>
+    </task>
+    <task id="LOCAL-00048" summary="added generalized mixed effects for binomial data; added plots for fixed factors and word measures with all predictors">
+      <created>1688378797604</created>
+      <option name="number" value="00048" />
+      <option name="presentableId" value="LOCAL-00048" />
+      <option name="project" value="LOCAL" />
+      <updated>1688378797604</updated>
+    </task>
+    <task id="LOCAL-00049" summary="troubleshooted errors in provo predictability norms file and provo eye-tracking file. This includes functions to make sure the alignment between the words in the model stimuli and outputs and the words in the cloze and eye-tracking data; Added regression probability and single fix duration measures; debugged infinite refixation on long word, now there is a limit of 3 refixations, not only if the word does not get recognized, but also if the word keeps getting the highest attentional input (e.g. long words);">
+      <created>1688654677251</created>
+      <option name="number" value="00049" />
+      <option name="presentableId" value="LOCAL-00049" />
+      <option name="project" value="LOCAL" />
+      <updated>1688654677253</updated>
+    </task>
+    <task id="LOCAL-00050" summary="rolled back start of changes on llama, to make it work before committing changes; eval now limits eye-tracking data to the texts used in simulation, instead of all texts always.">
+      <created>1688657173142</created>
+      <option name="number" value="00050" />
+      <option name="presentableId" value="LOCAL-00050" />
+      <option name="project" value="LOCAL" />
+      <updated>1688657173153</updated>
+    </task>
+    <option name="localTasksCounter" value="130" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="origin/master" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="fixed formula for defining new eye position" />
+    <MESSAGE value="updated experiment parameters for run in remote gpu; commented out skipping condition" />
+    <MESSAGE value="corrected typo in global parameters" />
+    <MESSAGE value="new experiment parameters for pre-test" />
+    <MESSAGE value="more time allocated for gpu to run pre-test" />
+    <MESSAGE value="commented out progress bar to avoid broken pipe" />
+    <MESSAGE value="changed data filenames to have year first, rather than day; changed parameters according to Martijn's latest adjustments; updated predictability plots; adjustment plot raw measures filepath" />
+    <MESSAGE value="changed settings for running test in remote gpu; changed filepath of predictability mapping; changed condition of using predictability mapping to not have baseline producing an empty predictability mapping" />
+    <MESSAGE value="changed pred weight in experiment_parameters to run next round of testing" />
+    <MESSAGE value="adaptions to run parallel jobs in shell script" />
+    <MESSAGE value="fixed shell script" />
+    <MESSAGE value="changed structure of json for parallel jobs to have one weight per predictor (assuming having all weights at once would surpass the maximum time allowed to use the gpu for running the jobs); and fixed argument number-of-simulations to be read in as an int, not a string." />
+    <MESSAGE value="..." />
+    <MESSAGE value="configured scripts to run test remotely" />
+    <MESSAGE value="re-testing shell script for parallel run" />
+    <MESSAGE value="added argument to makedir to allow parallel jobs to save their outputs in the same folder, fixing unsaved outputs)" />
+    <MESSAGE value="changed arguments shell script" />
+    <MESSAGE value="changed pred weight shell script" />
+    <MESSAGE value="fixed error word_predictions referenced before assignment bcs of lexicon condition in simulate_experiment.py" />
+    <MESSAGE value="changed weight pred to 0.2 for final set of testing in remote gpu" />
+    <MESSAGE value="comment back evaluation" />
+    <MESSAGE value="re-evaluate 0.1 for RMSE per simulation in normalized error" />
+    <MESSAGE value="--" />
+    <MESSAGE value="updated readme with description of new directory structure" />
+    <MESSAGE value="changes for manuscript revision" />
+    <option name="LAST_COMMIT_MESSAGE" value="changes for manuscript revision" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/OB1_reader_updated$semantic_processing.coverage" NAME="semantic_processing Coverage Results" MODIFIED="1723119706703" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/OB1_reader_updated$analysis_predictability.coverage" NAME="analysis_predictability Coverage Results" MODIFIED="1704819392227" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/OB1_reader$main.coverage" NAME="main Coverage Results" MODIFIED="1737112249780" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/OB1_reader_updated$error_analysis_predictability.coverage" NAME="error_analysis_predictability Coverage Results" MODIFIED="1722262297229" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/OB1_reader_updated$main.coverage" NAME="main Coverage Results" MODIFIED="1723209861061" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+  </component>
+</project>
