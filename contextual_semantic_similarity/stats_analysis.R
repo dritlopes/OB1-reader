@@ -4,7 +4,7 @@
 rm(list = ls())
 
 # 0.2 - Set working directory to where the data file is located & results should be saved
-setwd("/Users/adriellilopes/PycharmProjects/Text2KG/data")
+setwd("/Users/adriellilopes/PycharmProjects/OB1-reader/contextual_semantic_similarity/data/")
 
 # 0.3 - Load packages
 library(lme4)
@@ -17,10 +17,10 @@ library(dplyr)
 # 1. Models
 
 model<-"gpt2"
-layer<-"1"
+layer<-"11"
 corpus<-"meco"
-df<-read.csv(glue("full_{model}_{layer}_{corpus}_df_copy.csv"),header=T)
-# head(df)
+df<-read.csv(glue("processed/{corpus}/{model}/full_{model}_[{layer}]_{corpus}_previous_context_df.csv"),header=T) 
+head(df)
 # dim(df)
 # names(df)
 # summary(df)
@@ -98,23 +98,6 @@ summary(model)
 model <- glmer(reread ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df, family="binomial")
 summary(model)
 
-# 1.3. Mixed models without participant level (word mean)
-model<-"gpt2"
-layer<-"1"
-corpus<-"meco"
-df<-read.csv(glue("full_{model}_{layer}_{corpus}_mean_df.csv"), header=T)
-
-# Total Reading Time
-model <- lmer(dur ~ similarity + surprisal + frequency + length + (1|itemid), data=df)
-summary(model)
-
-# Skipping
-model <- lmer(skip ~ similarity + surprisal + frequency + length + (1|itemid), data=df)
-summary(model)
-
-# Rereading
-model <- lmer(reread ~ similarity + surprisal + frequency + length + (1|itemid), data=df)
-summary(model)
 
 # Standardize coefficients 
 

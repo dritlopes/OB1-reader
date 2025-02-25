@@ -160,7 +160,7 @@ def get_similarity(embeddings, word_token_pos_map, sequences, words, model_name,
 
     return similarities
 
-def calculate_similarity_values(texts_df, corpus_name, model_name, layers, context_type, model, tokenizer, device):
+def calculate_similarity_values(texts_df, model_name, layers, context_type, model, tokenizer, device, path_to_save):
 
     print(f'Extracting embedding similarity from {model_name}...')
 
@@ -211,8 +211,6 @@ def calculate_similarity_values(texts_df, corpus_name, model_name, layers, conte
         # print(all_similarity)
         texts_df['similarity'] = all_similarity
 
-    model_name = model_name.replace('/', '_')
-    path_to_save = f'../data/{corpus_name}/{model_name}/similarity_{context_type}_{layers}_{model_name}_{corpus_name}_df.csv'
     directory = os.path.dirname(path_to_save)
     if not os.path.isdir(directory):
         os.mkdir(directory)

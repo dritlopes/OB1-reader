@@ -1,1 +1,4 @@
 /.idea
+/contextual_semantic_similarity/data/processed/
+/contextual_semantic_similarity/data/raw/
+/contextual_semantic_similarity/data/model_output/

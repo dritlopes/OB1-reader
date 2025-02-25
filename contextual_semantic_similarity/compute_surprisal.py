@@ -5,7 +5,7 @@ from torch import nn
 import os
 
 # Calculate the surprisal value for each word from original texts (df)
-def calculate_surprisal_values(df: pd.DataFrame, corpus_name, model_name, model, tokenizer, device):
+def calculate_surprisal_values(df: pd.DataFrame, corpus_name, model_name, model, tokenizer, device, path_to_save):
 
     # Process text with language model
     # previous_context = ""  # cumulator, to start a for loop you need an empty variable to include something in each loop
@@ -58,15 +58,14 @@ def calculate_surprisal_values(df: pd.DataFrame, corpus_name, model_name, model,
 
     df['surprisal'] = surprisal_values
 
-    model_name = model_name.replace('/', '_')
-    path_to_save = f"../data/{corpus_name}/{model_name}/surprisal_{model_name}_{corpus_name}_df.csv"
     directory = os.path.dirname(path_to_save)
     if not os.path.isdir(directory):
         os.mkdir(directory)
     df.to_csv(path_to_save, sep='\t')
 
     # write out which words in the corpus are multi-tokens in the model
-    with open(f'../data/{corpus_name}/{model_name}/multi_tokens_{model_name}_{corpus_name}.csv', 'w') as outfile:
+    path_to_save_multi_tokens = path_to_save.replace('.csv', '_multi_tokens.csv')
+    with open(path_to_save_multi_tokens, 'w') as outfile:
         outfile.write(f'CORPUS_TOKEN\tMODEL_TOKEN\n')
         for model_token, corpus_token in zip(model_tokens, corpus_tokens):
             outfile.write(f'{corpus_token}\t{model_token}\n')

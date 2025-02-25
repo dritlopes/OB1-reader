@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import rdata
-import os
 
 def create_original_texts_dataframe(file_path, language):
 
@@ -28,13 +27,15 @@ def clean_original_texts(trialid_raw_df: pd) -> pd.DataFrame:
     trialid_cleaning_df = trialid_raw_df.copy()
 
     # replace with "space" the "\\n" at the beginning of a word
-    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].str.replace(" \\n", " ")
+    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].apply(lambda x: str(x).replace(" \\n", " "))
     # replace with "space" the "\\n" between words as "word\\nword"
-    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].str.replace("\\n", " ")
+    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].apply(lambda x: str(x).replace("\\n", " "))
     # when "word-word" add a space after first word, then the words would be separated equally
-    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].str.replace("-", "- ")
+    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].apply(lambda x: str(x).replace("-", "- "))
     # replace all the quotation marks with an empty string
-    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].str.replace('"','')
+    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].apply(lambda x: str(x).replace('"', ''))
+    # replace \n in the\ndoors
+    trialid_cleaning_df["text"] = trialid_cleaning_df["text"].apply(lambda x: str(x).replace("the\ndoors", "the doors"))
 
     return trialid_cleaning_df
 
@@ -187,29 +188,29 @@ def pre_process_eye_data(filepath, language, corpus):
 
     return df
 
-def add_variables(variables, df, resources, language, corpus):
+def add_variables(variables, df, language, corpus, frequency_filepath):
 
     if 'length' in variables:
         # add length and frequency
         df['length'] = [len(str(word)) for word in df['ia'].tolist()]
         df["length.log"] = np.log(df["length"])
 
-    if 'frequency' in variables and 'frequency' in resources.keys():
+    if 'frequency' in variables and frequency_filepath:
 
-        if resources['frequency'] == f'../data/{corpus}/wordlist_meco.csv':
+        if corpus == 'meco': # we use frequency file from meco corpus
             freq_col_name = 'zipf_freq'
             word_col_name = 'ia_clean'
-            frequency_df = pd.read_csv(resources['frequency'], usecols=[freq_col_name, word_col_name])
+            frequency_df = pd.read_csv(frequency_filepath, usecols=[freq_col_name, word_col_name])
             if language == 'en':
                 language = 'english'
             if language == 'du':
                 language = 'dutch'
             if 'lang' in frequency_df.columns:
                 frequency_df = frequency_df[frequency_df['lang'] == language]
-        elif resources['frequency'] == f'../data/{corpus}/SUBTLEX_UK.txt':
+        elif corpus == 'Provo': # we use SUBTLEX-UK
             freq_col_name = 'LogFreq(Zipf)'
             word_col_name = 'Spelling'
-            frequency_df = pd.read_csv(resources['frequency'], sep='\t',
+            frequency_df = pd.read_csv(frequency_filepath, sep='\t',
                                        usecols=[freq_col_name, word_col_name],
                                        dtype={word_col_name: np.dtype(str)})
         else:
@@ -228,11 +229,7 @@ def add_variables(variables, df, resources, language, corpus):
 
     return df
 
-def pre_process_data(eye_move_filepath, frequency_filepath, texts_filepath, corpus='Provo' , language='en'):
-
-    directory = f'../data/{corpus}/'
-    if not os.path.isdir(directory):
-        os.mkdir(directory)
+def pre_process_data(eye_move_filepath, texts_filepath, frequency_filepath = '', corpus='Provo' , language='en', variables=['length']):
 
     # Generate a dataset with each word of each text as row.
     print('Pre-processing dataframe with texts and words from corpus...')
@@ -241,24 +238,16 @@ def pre_process_data(eye_move_filepath, frequency_filepath, texts_filepath, corp
         original_df = create_original_texts_dataframe(texts_filepath, language)
         texts_df = clean_original_texts(original_df)
         words_df = create_ianum_from_original_texts(texts_df)
-        words_df.to_csv(f'../data/meco/words_{language}_df.csv', index=False)
     elif corpus == 'Provo':
         texts_df = pd.read_csv(texts_filepath, encoding="ISO-8859-1")
         words_df = create_texts_df(texts_df)
-        words_df.to_csv(f'../data/Provo/words_{language}_df.csv', index=False)
     else:
         raise NotImplementedError(f'Corpus {corpus} not implemented.')
 
     print('Pre-processing dataframe with eye movements...')
     # Generate a dataset with eye-tracking dependent variables and co-variables
-    variables = ['length']
-    resources = dict()
-    if frequency_filepath:
-        resources['frequency'] = frequency_filepath
-        variables.append('frequency')
     eye_df = pre_process_eye_data(eye_move_filepath, language, corpus)
-    # eye_df = add_variables(variables, eye_df, resources, language, corpus)
-    eye_df.to_csv(f'../data/{corpus}/corpus_{language}_df.csv', index=False)
+    eye_df = add_variables(variables, eye_df, language, corpus, frequency_filepath)
 
     print('Checking alignment between dataframes...')
     # check alignment between words_df and corpus_df

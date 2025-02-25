@@ -4,17 +4,17 @@ import seaborn as sb
 import numpy as np
 import os
 
-def correlate_eye2sim(layers, measures, model_name, corpus_name, context_type):
+def correlate_eye2sim(layers, paths_to_data, measures, model_name, dir_to_save):
 
     print('Measuring correlation between similarity and eye movements...')
 
     all_measures, all_coef, all_layers = [], [], []
 
-    for layer_combi in layers:
+    for layer_combi, layer_combi_data in zip(layers, paths_to_data):
 
         all_corr = []
 
-        eye_move_sim_df = pd.read_csv(f'../data/{corpus_name}/{model_name}/full_{model_name}_{layer_combi}_{corpus_name}_{context_type}_df.csv')
+        eye_move_sim_df = pd.read_csv(layer_combi_data)
         measures = [measure for measure in measures if measure in eye_move_sim_df.columns]
 
         for measure in measures:
@@ -31,7 +31,7 @@ def correlate_eye2sim(layers, measures, model_name, corpus_name, context_type):
         cor_df = pd.DataFrame({'measure': measures,
                                'coefficient': [cor.statistic for cor in all_corr],
                                'p-value': [cor.pvalue for cor in all_corr]})
-        cor_df.to_csv(f'../data/{corpus_name}/{model_name}/sim_{layer_combi}_{model_name}_pearsonr_corr.csv')
+        cor_df.to_csv(f'{dir_to_save}/sim_{layer_combi}_{model_name}_pearsonr_corr.csv')
         all_measures.extend(measures)
         all_coef.extend([cor.statistic if not np.isnan(cor.statistic) else 0. for cor in all_corr])
         all_layers.extend([layer_combi[0] for cor in all_corr]) # layer_combi = [n], n being the number of the layer
@@ -40,20 +40,19 @@ def correlate_eye2sim(layers, measures, model_name, corpus_name, context_type):
     graph = sb.pointplot(x=all_layers, y=all_coef, hue=all_measures)
     graph.set_xticks(range(int(layers[0][0]), int(layers[-1][0])+1))
     graph.set(xlabel='Layer', ylabel='PCC')
-    graph.get_figure().savefig(f'../data/{corpus_name}/{model_name}/pearson_corr_sim_{layers}_{model_name}.tiff', dpi=300)
+    graph.get_figure().savefig(f'{dir_to_save}/pearson_corr_sim_{layers}_{model_name}.tiff', dpi=300)
 
-def cross_validate(layers, measures, model_name, corpus_name, context_type, n=5, seed=1):
+def cross_validate(layers, paths_to_data, measures, model_name, dir_to_save, n=5, seed=1):
 
     # save measures, correlations, and layers
     all_measures, all_coef, all_layers = [], [], []
 
-    for layer_combi in layers:
+    for layer_combi, layer_combi_data in zip(layers, paths_to_data):
 
         # for specific layer, save correlations, which measures and which folds
         all_corr, all_mea, all_folds = [], [], []
 
-        eye_move_sim_df = pd.read_csv(
-            f'../data/{corpus_name}/{model_name}/full_{model_name}_{layer_combi}_{corpus_name}_{context_type}_df.csv')
+        eye_move_sim_df = pd.read_csv(layer_combi_data)
         measures = [measure for measure in measures if measure in eye_move_sim_df.columns]
 
         for measure in measures:
@@ -75,7 +74,7 @@ def cross_validate(layers, measures, model_name, corpus_name, context_type, n=5,
                                'fold': all_folds,
                                'coefficient': [cor.statistic if not np.isnan(cor.statistic) else 0. for cor in all_corr],
                                'p-value': [cor.pvalue for cor in all_corr]})
-        cor_df.to_csv(f'../data/{corpus_name}/{model_name}/sim_{layer_combi}_{model_name}_pearsonr_corr_{n}_crossvalid.csv')
+        cor_df.to_csv(f'{dir_to_save}/sim_{layer_combi}_{model_name}_pearsonr_corr_{n}_crossvalid.csv')
         # compute mean correlation across folds for each measure for each layer
         mean_cor_df = cor_df.groupby(['measure'], as_index=False)['coefficient'].mean()
         # print(mean_cor_df)
@@ -95,13 +94,12 @@ def cross_validate(layers, measures, model_name, corpus_name, context_type, n=5,
     # print(all_measures)
     graph.set_xticks(range(int(layers[0][0]), int(layers[-1][0]) + 1))
     graph.set(xlabel='Layer', ylabel='PCC')
-    graph.get_figure().savefig(f'../data/{corpus_name}/{model_name}/pearson_corr_sim_{layers}_{model_name}_{n}_crossvalid_mean.tiff', dpi=300)
+    graph.get_figure().savefig(f'{dir_to_save}/pearson_corr_sim_{layers}_{model_name}_{n}_crossvalid_mean.tiff', dpi=300)
 
-def evaluation(layers, measures, model_name, corpus_name, context_type, n, seed):
+def evaluation(layers, paths_to_data, measures, model_name, n, seed, dir_to_save):
 
-    directory = f'../data/{corpus_name}/{model_name}/'
-    if not os.path.isdir(directory):
-        os.mkdir(directory)
+    if not os.path.isdir(dir_to_save):
+        os.mkdir(dir_to_save)
 
-    correlate_eye2sim(layers, measures, model_name, corpus_name, context_type)
-    cross_validate(layers, measures, model_name, corpus_name, context_type, n, seed)
+    correlate_eye2sim(layers, paths_to_data, measures, model_name, dir_to_save)
+    cross_validate(layers, paths_to_data, measures, model_name, dir_to_save, n, seed)
