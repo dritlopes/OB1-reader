@@ -9,4 +9,3 @@ model = ReadingModel([text])
 
 # run reading simulation
 output = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv')
-

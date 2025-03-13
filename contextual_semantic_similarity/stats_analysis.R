@@ -19,7 +19,9 @@ library(dplyr)
 model<-"gpt2"
 layer<-"11"
 corpus<-"meco"
-df<-read.csv(glue("processed/{corpus}/{model}/full_{model}_[{layer}]_{corpus}_previous_context_df.csv"),header=T) 
+context_type<-"window"
+type<-"saliency"
+df<-read.csv(glue("processed/{corpus}/{model}/full_{model}_[{layer}]_{corpus}_{context_type}_{type}_df.csv"),header=T) 
 head(df)
 # dim(df)
 # names(df)
@@ -37,13 +39,13 @@ RandomIntPartOnly <- lmer(dur ~ 1 + (1|uniform_id), data=df)
 summary(RandomIntPartOnly)
 AIC(RandomIntPartOnly)
 performance::icc(RandomIntPartOnly)
-# Random intercept (1|itemid)
-RandomIntTrialOnly <- lmer(dur ~ 1 + (1|itemid), data=df) 
+# Random intercept (1|trialid)
+RandomIntTrialOnly <- lmer(dur ~ 1 + (1|trialid), data=df) 
 summary(RandomIntTrialOnly)
 AIC(RandomIntTrialOnly)
 performance::icc(RandomIntTrialOnly)
-# Random intercept (1|itemid) + (1|uniformid)
-RandomIntOnly <- lmer(dur ~ 1 + (1|itemid) + (1|uniform_id), data=df) 
+# Random intercept (1|trialid) + (1|uniformid)
+RandomIntOnly <- lmer(dur ~ 1 + (1|trialid) + (1|uniform_id), data=df) 
 summary(RandomIntOnly)
 AIC(RandomIntOnly)
 performance::icc(RandomIntOnly)
@@ -58,7 +60,7 @@ RandomIntPartOnly <- glmer(skip ~ 1 + (1|uniform_id), data=df, family="binomial"
 summary(RandomIntPartOnly)
 AIC(RandomIntPartOnly)
 # Random intercept (1|trialid)
-RandomIntTrialOnly <- glmer(skip ~ 1 + (1|itemid), data=df, family="binomial") 
+RandomIntTrialOnly <- glmer(skip ~ 1 + (1|trialid), data=df, family="binomial") 
 summary(RandomIntTrialOnly)
 AIC(RandomIntTrialOnly)
 
@@ -71,7 +73,7 @@ RandomIntPartOnly <- glmer(reread ~ 1 + (1|uniform_id), data=df, family="binomia
 summary(RandomIntPartOnly)
 AIC(RandomIntPartOnly)
 # Random intercept (1|itemid)
-RandomIntTrialOnly <- glmer(reread ~ 1 + (1|itemid), data=df, family="binomial") 
+RandomIntTrialOnly <- glmer(reread ~ 1 + (1|trialid), data=df, family="binomial") 
 summary(RandomIntTrialOnly)
 AIC(RandomIntTrialOnly)
 
@@ -79,28 +81,56 @@ AIC(RandomIntTrialOnly)
 # 1.2. Mixed Models
 
 # First Fixation Duration
-model <- lmer(firstfix.dur ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df)
+model <- lmer(firstfix_dur ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df)
 summary(model)
 
 # Gaze Duration
-model <- lmer(firstrun.dur ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df)
+model <- lmer(firstrun_dur ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df)
 summary(model)
 
 # Total Reading Time
-model <- lmer(dur ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df)
+model <- lmer(dur ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df)
 summary(model)
 
 # Skipping
-model <- glmer(skip ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df, family="binomial")
+model <- glmer(skip ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df, family="binomial")
 summary(model)
 
 # Rereading
-model <- glmer(reread ~ similarity + surprisal + frequency + length + (1|uniform_id) + (1|itemid), data=df, family="binomial")
+model <- glmer(reread ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df, family="binomial")
 summary(model)
 
+# Next fixation chance (fixation data)
+model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df, family="binomial")
+summary(model)
 
-# Standardize coefficients 
+# Check each direction separately
+df_left <- df %>% filter(distance %in% c(-3,-2,-1))
+model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df_left, family="binomial")
+summary(model)
+df_right <- df %>% filter(distance %in% c(3,2,1))
+model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df_right, family="binomial")
+summary(model)
 
+# Check function vs content words
+df_open <- df %>% filter(pos_tag %in% c('PROPN', 'VERB', 'NOUN', 'INTJ', 'ADV', 'ADJ'))
+model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df_open, family="binomial")
+summary(model)
+df_closed <- df %>% filter(pos_tag %in% c('ADP', 'AUX', 'CCONJ', 'DET', 'NUM', 'PART', 'PRON', 'SCONJ'))
+model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df_closed, family="binomial")
+summary(model)
+
+# Next fixation chance with saliency (fixation data)
+model <- lmer(landing_target_position ~ pred_landing_target_position + target_surprisal + target_frequency + target_length + (1|participant_id), data=df)
+summary(model)
+
+# Check each direction separately
+df_left <- df %>% filter(landing_target_position %in% c(-3,-2,-1))
+model <- lmer(landing_target_position ~ pred_landing_target_position + target_surprisal + target_frequency + target_length + (1|participant_id), data=df_left)
+summary(model)
+df_right <- df %>% filter(landing_target_position %in% c(3,2,1))
+model <- lmer(landing_target_position ~ pred_landing_target_position + target_surprisal + target_frequency + target_length + (1|participant_id), data=df_right)
+summary(model)
 
 # Predict with model
 # predicted_regressionIn_likelihood <- predict(

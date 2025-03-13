@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import rdata
+import spacy
 
 def create_original_texts_dataframe(file_path, language):
 
@@ -52,7 +53,9 @@ def create_ianum_from_original_texts(texts_df: pd):
             trialid.append((row['trialid'])-1) # to start at 0
             text.append(row['text'])
             ianum_new.append(i)
-            ia_new.append(text_words[i])
+            word = text_words[i]
+            word = word.replace('"','')
+            ia_new.append(word)
     words_df = pd.DataFrame({'id': [i for i in range(len(trialid))],
                             'trialid': trialid,
                             'texts': text,
@@ -80,7 +83,9 @@ def create_texts_df(data):
             text = text.replace('Õ', "'")
 
         text_words = text.split()
+        text_words = [word.replace('"', '') for word in text_words]
         text_word_ids = [i for i in range(len(text_words))]
+        print(text_words)
         words.extend(text_words)
         word_ids.extend(text_word_ids)
         texts.extend([text for i in range(len(text_words))])
@@ -103,17 +108,24 @@ def convert_rdm_to_csv(original_filepath):
 
     return filepath
 
-def pre_process_eye_data(filepath, language, corpus):
+def pre_process_eye_data(filepath, language):
 
     if filepath.endswith('.rda'):
         filepath = convert_rdm_to_csv(filepath)
 
-    df = pd.read_csv(filepath)
+    encoding = 'utf-8'
+    if 'Provo_Corpus-Additional_Eyetracking_Data-Fixation_Report' in filepath:
+        encoding="ISO-8859-1"
 
-    if corpus == 'meco':
+    df = pd.read_csv(filepath, encoding=encoding)
+
+    # Word-based data from MECO
+    if "joint_data_trimmed" in filepath:
         if 'lang' in df.columns:
             df = df[(df['lang'] == language)]
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+        # select columns
+        df = df[['uniform_id', 'trialid', 'ia', 'ianum', 'reread', 'dur', 'reg.in', 'reg.out', 'skip', 'singlefix', 'firstrun.dur', 'firstfix.dur']]
         # drop rows with empty word
         df['ia'] = df['ia'].replace(' ', np.nan)
         df = df.dropna(subset=['ia'])
@@ -130,8 +142,19 @@ def pre_process_eye_data(filepath, language, corpus):
                                         else x['ianum'], axis=1)
         # fix tokenization to align with words_df
         df["ia"] = df["ia"].str.replace('"', '')
+        # rename columns to match columns from word_df and evaluation
+        df = df.rename(columns={'firstrun.dur': 'gaze_dur',
+                                'firstfix.dur': 'first_fix_dur',
+                                'uniform_id': 'participant_id',
+                                'reg.in': 'reg_in',
+                                'reg.out': 'reg_out'})
 
-    elif corpus == 'Provo':
+
+    # Word-based data from Provo
+    elif 'Provo_Corpus-Eyetracking_Data' in filepath:
+        # select columns
+        df = df[['Participant_ID', 'Text_ID', 'Word', 'Word_Number', 'IA_FIRST_FIXATION_DURATION', 'IA_FIRST_RUN_DWELL_TIME', 'IA_DWELL_TIME', 'IA_SKIP', 'IA_REGRESSION_IN', 'IA_REGRESSION_OUT']]
+        # drop nan values
         df.dropna(subset=['Text_ID', 'Word', 'Word_Number'], inplace=True)
         df.reset_index(drop=True, inplace=True)
         # align indexing with words_df (which starts at 0, not at 1)
@@ -145,8 +168,9 @@ def pre_process_eye_data(filepath, language, corpus):
         df['Word_Number'] = df.apply(
             lambda x: 50 if (x['Text_ID'] == 17) & (x['Word_Number'] >= 2) & (x['Word'] == 'evolution') else x['Word_Number'],
             axis=1)
-        # fix tokenization
+        # fix tokenization to align with words_df
         df['Word'] = df.apply(lambda x: 'true' if x['Word'] == 'TRUE' else x['Word'], axis=1)
+        df["Word"] = df["Word"].str.replace('"', '')
         map = {'nationwide.': ['nationwide', 57, 2],
                'possible.': ['possible', 56, 7],
                'carts.': ['carts', 52, 12],
@@ -184,7 +208,81 @@ def pre_process_eye_data(filepath, language, corpus):
                                 'Word_Number': 'ianum',
                                 'Text_ID': 'trialid',
                                 'IA_SKIP': 'skip',
-                                'IA_DWELL_TIME': 'dur'})
+                                'IA_DWELL_TIME': 'dur',
+                                'IA_FIRST_FIXATION_DURATION': 'first_fix_dur',
+                                'IA_FIRST_RUN_DWELL_TIME': 'gaze_dur',
+                                'IA_REGRESSION_IN': 'reg_in',
+                                'IA_REGRESSION_OUT': 'reg_out',
+                                'Participant_ID': 'participant_id'})
+
+    # Fixation report from MECO
+    elif "joint_fix_trimmed" in filepath:
+        df = df[(df['lang'] == language)]
+        # make sure outliers are excluded (out = fixation outside the area of the text)
+        df = df[df['type']=="in"]
+        df = df[['uniform_id','trialid', 'dur', 'ia', 'ianum', 'ia.reg.in', 'ia.reg.out', 'ia.firstskip', 'ia.refix']]
+        # trialid should start at 0, not at 1
+        df['trialid'] = df['trialid'].apply(lambda x: int(x) - 1)
+        # word id should start at 0 not at 1
+        df['ianum'] = df['ianum'].apply(lambda x: int(x) - 1)
+        # fix tokenization to align with words dataframe used to compute surprisal and embeddings
+        df["ia"] = df["ia"].apply(lambda x: str(x).replace('"', ''))
+        # compute outgoing saccade distance in words
+        distances = []
+        for id, fixations in df.groupby(['uniform_id','trialid']):
+            ianums = fixations['ianum'].tolist()
+            for i, ianum in enumerate(ianums):
+                # if not last fixation, register the number of words between this and the next fixation
+                if i + 1 < len(ianums):
+                    distances.append(ianums[i+1] - ianum)
+                # if last fixation, no sacc.out distance
+                else:
+                    distances.append(None)
+        df['landing_target_position'] = distances
+        # rename columns to match columns from word_df and evaluation
+        df = df.rename(columns={'ia.reg.in': 'reg_in',
+                                'ia.reg.out': 'reg_out',
+                                'ia.firstskip': 'first_skip',
+                                'ia.refix': 'refix',
+                                'uniform_id': 'participant_id'})
+
+    # Fixation report from Provo
+    # Not using it because it does not have trialid (no way to align with words_df bcs it doesn't say from which text the words come from)
+    elif "Provo_Corpus-Additional_Eyetracking_Data-Fixation_Report" in filepath:
+        # select columns
+        df = df[['RECORDING_SESSION_LABEL', 'CURRENT_FIX_INTEREST_AREA_INDEX', 'CURRENT_FIX_INTEREST_AREA_LABEL', 'CURRENT_FIX_INTEREST_AREA_DWELL_TIME', 'NEXT_FIX_INTEREST_AREA_INDEX', 'NEXT_FIX_INTEREST_AREA_LABEL', 'PREVIOUS_FIX_INTEREST_AREA_INDEX', 'PREVIOUS_FIX_INTEREST_AREA_LABEL']]
+        # rename columns
+        df = df.rename(columns={'CURRENT_FIX_INTEREST_AREA_DWELL_TIME': 'dur',
+                                'RECORDING_SESSION_LABEL': 'participant.id',
+                                'CURRENT_FIX_INTEREST_AREA_INDEX': 'ianum',
+                                'CURRENT_FIX_INTEREST_AREA_LABEL': 'ia',
+                                'NEXT_FIX_INTEREST_AREA_INDEX': 'next.ianum',
+                                'NEXT_FIX_INTEREST_AREA_LABEL': 'next.ia',
+                                'PREVIOUS_FIX_INTEREST_AREA_LABEL': 'previous.ia',
+                                'PREVIOUS_FIX_INTEREST_AREA_INDEX': 'previous.ianum'})
+        # drop rows with empty cell ('.')
+        df['ianum'] = df['ianum'].replace('.', np.nan)
+        df['ia'] = df['ia'].replace('.', np.nan)
+        df.dropna(subset=['ia', 'ianum'], inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        # reindex text id and word id to match words_df
+        df['ianum'] = df['ianum'].apply(lambda x: int(x) - 1)
+        df['next.ianum'] = df['next.ianum'].apply(lambda x: int(x) - 1 if x != '.' else x)
+        df['previous.ianum'] = df['previous.ianum'].apply(lambda x: int(x) - 1 if x != '.' else x)
+        # replace '.' by None
+        df['next.ianum'] = df['next.ianum'].replace('.', None)
+        df['previous.ianum'] = df['previous.ianum'].replace('.', None)
+        # compute outgoing saccade distance in words
+        distances = []
+        for word_id, next_word_id in zip(df['ianum'].tolist(), df['next.ianum'].tolist()):
+            if next_word_id:
+                distances.append(int(next_word_id) - int(word_id))
+            else:
+                distances.append(None)
+        df['landing_target_position'] = distances
+
+    else:
+        raise NotImplementedError('Corpus not supported.')
 
     return df
 
@@ -193,7 +291,7 @@ def add_variables(variables, df, language, corpus, frequency_filepath):
     if 'length' in variables:
         # add length and frequency
         df['length'] = [len(str(word)) for word in df['ia'].tolist()]
-        df["length.log"] = np.log(df["length"])
+        df["length_log"] = np.log(df["length"])
 
     if 'frequency' in variables and frequency_filepath:
 
@@ -227,26 +325,40 @@ def add_variables(variables, df, language, corpus, frequency_filepath):
                 frequency_col.append(None)
         df['frequency'] = frequency_col
 
+    if 'pos_tag' in variables:
+        pos_tag_col = []
+        nlp = spacy.load("en_core_web_sm")
+        for word in df['ia'].tolist():
+            doc = nlp(word)
+            pos_tag_col.append(doc[0].pos_)
+        df['pos_tag'] = pos_tag_col
+
     return df
 
-def pre_process_data(eye_move_filepath, texts_filepath, frequency_filepath = '', corpus='Provo' , language='en', variables=['length']):
+def pre_process_word_data(texts_filepath, frequency_filepath = '', corpus='meco' , language='en', variables=['length']):
 
     # Generate a dataset with each word of each text as row.
-    print('Pre-processing dataframe with texts and words from corpus...')
+    print('Pre-processing dataframe with texts...')
     if corpus == 'meco':
         # columns: trialid (the id of the text); texts (the text the word belongs to); ianum (id of the word); ia (word)
         original_df = create_original_texts_dataframe(texts_filepath, language)
         texts_df = clean_original_texts(original_df)
         words_df = create_ianum_from_original_texts(texts_df)
+        # words_df = pd.read_csv(f'data/processed/{corpus}/words_en_df.csv')
+        words_df = add_variables(variables, words_df, language, corpus, frequency_filepath)
     elif corpus == 'Provo':
         texts_df = pd.read_csv(texts_filepath, encoding="ISO-8859-1")
         words_df = create_texts_df(texts_df)
     else:
         raise NotImplementedError(f'Corpus {corpus} not implemented.')
 
+    return words_df
+
+def pre_process_corpus_data(eye_move_filepath, words_df, frequency_filepath = '', corpus='meco' , language='en', variables=['length']):
+
     print('Pre-processing dataframe with eye movements...')
     # Generate a dataset with eye-tracking dependent variables and co-variables
-    eye_df = pre_process_eye_data(eye_move_filepath, language, corpus)
+    eye_df = pre_process_eye_data(eye_move_filepath, language)
     eye_df = add_variables(variables, eye_df, language, corpus, frequency_filepath)
 
     print('Checking alignment between dataframes...')
@@ -256,9 +368,7 @@ def pre_process_data(eye_move_filepath, texts_filepath, frequency_filepath = '',
         words_df_dict[trialid] = dict()
         for ia, ianum in zip(group['ia'].tolist(), group['ianum'].tolist()):
             words_df_dict[trialid][ianum] = ia
-    if corpus == 'meco': participant_col = 'uniform_id'
-    elif corpus == 'Provo': participant_col = 'Participant_ID'
-    for id, data in eye_df.groupby([participant_col, 'trialid']):
+    for id, data in eye_df.groupby(['participant_id', 'trialid']):
         for eye_ia, eye_ianum in zip(data['ia'].tolist(), data['ianum'].tolist()):
             assert eye_ianum in words_df_dict[id[1]].keys(), print(f'Word id {eye_ianum} of text {id[1]} and participant '
                                                                f'{id[0]} in eye-tracking data not in words dataframe;'
@@ -266,5 +376,25 @@ def pre_process_data(eye_move_filepath, texts_filepath, frequency_filepath = '',
             assert eye_ia == words_df_dict[id[1]][eye_ianum], print(f'Word {eye_ia} (id {eye_ianum} in text {id[1]} of participant '
                                                             f'{id[0]}) in eye-tracking dataframe does not match word '
                                                             f'of same text and id in words dataframe ({words_df_dict[id[1]][eye_ianum]}).')
+    return eye_df
 
-    return words_df, eye_df
+def main():
+
+    language = 'en'
+    texts_filepath = 'data/raw/meco/supp_texts.csv'  # 'data/raw/Provo/Provo_Corpus-Predictability_Norms.csv' # 'data/raw/meco/supp_texts.csv'
+    eye_move_filepath = 'data/raw/meco/joint_fix_trimmed.csv'  # 'data/raw/Provo/Provo_Corpus-Eyetracking_Data.csv' # data/raw/Provo/Provo_Corpus-Additional_Eyetracking_Data-Fixation_Report.csv # 'data/raw/meco/joint_data_trimmed.rda' # data/raw/meco/joint_data_trimmed.csv
+    frequency_filepath = 'data/raw/meco/wordlist_meco.csv'  # 'data/raw/Provo/SUBTLEX_UK.txt' # 'data/raw/meco/wordlist_meco.csv'
+    corpus_name = 'meco'  # 'Provo' 'meco'
+
+    words_filepath = f'data/processed/{corpus_name}/words_{language}_df.csv'
+    processed_eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_{language}_df.csv'  # corpus_{language}_df.csv if word-based data; fixation_report_{language}_df if fixation report
+
+    words_df = pre_process_word_data(texts_filepath, frequency_filepath, corpus_name, language, variables=['length', 'frequency', 'pos_tag'])
+    words_df.to_csv(words_filepath, index=False)
+
+    eye_move_df = pre_process_corpus_data(eye_move_filepath, words_df, frequency_filepath, corpus_name,
+                                                 language, variables=['length', 'frequency'])
+    eye_move_df.to_csv(processed_eye_move_filepath, index=False)
+
+if __name__ == '__main__':
+    main()

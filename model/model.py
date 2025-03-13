@@ -284,6 +284,7 @@ class ReadingModel:
     def __init__(self,
                  texts:list[str]=None,
                  cycle_size:int = 25,
+                 stimulus_window = '-3,3',
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
                  word_inhibition:float = -1.5,
@@ -337,6 +338,7 @@ class ReadingModel:
         :param texts: list of texts to be used to generate the lexicon (and to be included in the frequency resource and predictability resource).
         If not given, the model attempts to generate lexicon with words from word frequency resource and/or word predictability resource.
         :param cycle_size: milliseconds that one model cycle is supposed to last (brain time, not model time).
+        :param stimulus_window: what the processing window of the model should be like, i.e. which positions around the fixated word the model should process in parallel.
         :param ngram_to_word_excitation: weight on ngram activation.
         :param ngram_to_word_inhibition: weight on ngram inhibition.
         :param word_inhibition: weight on inhibition word exert on its recognition competitors.
@@ -384,6 +386,7 @@ class ReadingModel:
 
         self.texts = texts
         self.cycle_size = cycle_size
+        self.stimulus_window = stimulus_window
         self.ngram_to_word_excitation = ngram_to_word_excitation
         self.ngram_to_word_inhibition = ngram_to_word_inhibition
         self.word_inhibition = word_inhibition
@@ -463,7 +466,7 @@ class ReadingModel:
         Preferably aligned with eye-tracking data which will be used to evaluate simulations.
         :param task_name: the task name.
         :param number_of_simulations: how many times the model should read the give text(s).
-        :param output_filepath: filepath to save the processed text.
+        :param output_filepath: filepath to save the model output.
         :param verbose: whether to show progress messages in the shell or not.
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
         :return: the simulation output of the model.

@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 import os
 from collections import defaultdict
+import torch
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import LlamaForCausalLM, LlamaTokenizer
+from sklearn.preprocessing import normalize
 
 def generate_embeddings(words, model, tokenizer, device, layer_combi, model_name):
 
@@ -219,3 +223,154 @@ def calculate_similarity_values(texts_df, model_name, layers, context_type, mode
     print('DONE!')
 
     return texts_df
+
+def merge_eye_sim_window(similarity_df, eye_move_df, words_df, type = 'similarity'):
+
+    if type == 'similarity':
+        # filter fixations with saccades within window size -3 to +3 (exclude refixations for now - distance 0)
+        eye_move_df_filtered = eye_move_df.loc[eye_move_df['landing_target_position'].isin([-3, -2, -1, 1, 2, 3])].copy()
+        window_dict = defaultdict(list)
+        # iter through each fixation
+        for i in eye_move_df_filtered.itertuples():
+            # find saccade distance
+            saccade_distance = i.landing_target_position
+            # iter through each context word of fixated word
+            context = similarity_df[(similarity_df['trialid'] == i.trialid) & (similarity_df['ianum'] == i.ianum)]
+            for context_word in context.itertuples():
+                saccade_target = 0
+                frequency, pos_tag, surprisal = None, None, None
+                if saccade_distance == context_word.distance:
+                    saccade_target = 1
+                if 'frequency' in words_df.columns:
+                    index = words_df['ia'].tolist().index(context_word.context_ia)
+                    frequency = words_df['frequency'].tolist()[index]
+                if 'pos_tag' in words_df.columns:
+                    rows = words_df.loc[
+                        (words_df['trialid'] == context_word.trialid) & (words_df['ianum'] == context_word.context_ianum)]
+                    if len(rows['pos_tag'].tolist()) > 0:
+                        pos_tag = rows['pos_tag'].tolist()[0]
+                if 'surprisal' in eye_move_df_filtered.columns:
+                    rows = eye_move_df_filtered.loc[(eye_move_df_filtered['trialid'] == context_word.trialid) & (eye_move_df_filtered['ianum'] == context_word.context_ianum)]
+                    if len(rows['surprisal'].tolist()) > 0:
+                        surprisal = rows['surprisal'].tolist()[0]
+                window_dict['participant_id'].append(i.participant_id)
+                window_dict['trialid'].append(i.trialid)
+                window_dict['ianum'].append(i.ianum)
+                window_dict['ia'].append(i.ia)
+                window_dict['context_ianum'].append(context_word.context_ianum)
+                window_dict['context_ia'].append(context_word.context_ia)
+                window_dict['length'].append(len(context_word.context_ia))
+                window_dict['frequency'].append(frequency)
+                window_dict['pos_tag'].append(pos_tag)
+                window_dict['surprisal'].append(surprisal)
+                window_dict['similarity'].append(context_word.similarity)
+                window_dict['distance'].append(context_word.distance)
+                window_dict['landing_target'].append(saccade_target)
+
+        return pd.DataFrame.from_dict(window_dict)
+
+    elif type == 'saliency':
+        # filter fixations with saccades within window size -3 to +3 (including refixations - distance 0)
+        eye_move_df_filtered = eye_move_df.loc[eye_move_df['landing_target_position'].isin([-3, -2, -1, 0, 1, 2, 3])].copy()
+        saliencies, target_length, target_frequency, target_surprisal = [],[],[],[]
+        # iter through each fixation
+        for i in eye_move_df_filtered.itertuples():
+            # iter through each context word of fixated word to get similarities
+            similarities, dist_similarities = [], []
+            context = similarity_df[(similarity_df['trialid'] == i.trialid) & (similarity_df['ianum'] == i.ianum)]
+            # filter contexts with all six positions
+            saliency, frequency, length, surprisal = None, None, None, None
+            if len(context) == 6:
+                for context_word in context.itertuples():
+                    similarities.append(context_word.similarity)
+                    dist_similarities.append(context_word.distance*context_word.similarity)
+                    # if context word is the landing target, register its length, frequency and surprisal
+                    if context_word.distance == i.landing_target_position:
+                        length = len(context_word.context_ia)
+                        if 'frequency' in words_df.columns:
+                            index = words_df['ia'].tolist().index(context_word.context_ia)
+                            frequency = words_df['frequency'].tolist()[index]
+                        if 'surprisal' in eye_move_df.columns:
+                            rows = eye_move_df.loc[
+                                (eye_move_df['trialid'] == context_word.trialid) & (
+                                            eye_move_df['ianum'] == context_word.context_ianum)]
+                            if len(rows['surprisal'].tolist()) > 0:
+                                surprisal = rows['surprisal'].tolist()[0]
+                saliency = np.sum(dist_similarities)/np.sum(similarities)
+            saliencies.append(saliency)
+            target_frequency.append(frequency)
+            target_length.append(length)
+            target_surprisal.append(surprisal)
+        eye_move_df_filtered['pred_landing_target_position'] = saliencies
+        eye_move_df_filtered['target_length'] = target_length
+        eye_move_df_filtered['target_frequency'] = target_frequency
+        eye_move_df_filtered['target_surprisal'] = target_surprisal
+        # eye_move_df_filtered['pred_landing_target_position_scaled'] = normalize([saliencies], norm='max')[0]
+        return eye_move_df_filtered
+
+def main():
+
+    model_name = 'gpt2'
+    corpus_name = 'meco'
+    context_type = 'window'
+    layers = [[11]] # [i] for i in range(12)
+    model_token = ''
+    model_name_dir = model_name.replace('/', '_')
+    words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'
+    eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv'
+
+    words_df = pd.read_csv(words_filepath)
+    eye_move_df = pd.read_csv(eye_move_filepath)
+
+    for layer_combi in layers:
+
+        similarity_filepath = f'data/processed/{corpus_name}/{model_name_dir}/similarity_{context_type}_{layer_combi}_{model_name}_{corpus_name}_df.csv'
+        eye_move_sim_filepath = f'data/processed/{corpus_name}/{model_name_dir}/full_{model_name_dir}_{layer_combi}_{corpus_name}_{context_type}_df.csv'
+
+        if os.path.exists(similarity_filepath):
+            similarity_df = pd.read_csv(similarity_filepath)
+        else:
+            # Load LM
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print('Using device ', str(device))
+            if 'gpt2' in model_name:
+                # see https://huggingface.co/docs/transformers/model_doc/gpt2 for gpt2 documentation
+                model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
+                tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+            elif 'llama' in model_name:
+                tokenizer = LlamaTokenizer.from_pretrained(model_name, token=model_token)
+                model = LlamaForCausalLM.from_pretrained(model_name, token=model_token, torch_dtype=torch.float16).to(
+                    device)
+            else:
+                raise NotImplementedError('Language model not implemented.')
+            if device.type == 'cuda':
+                print(torch.cuda.get_device_name(0))
+                print('Memory Usage:')
+                print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+                print('Cached:   ', round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1), 'GB')
+            print(f"Processing layer(s) {layer_combi}...")
+            similarity_df = calculate_similarity_values(words_df,
+                                                        model_name,
+                                                        layer_combi,
+                                                        context_type,
+                                                        model,
+                                                        tokenizer,
+                                                        device,
+                                                        similarity_filepath)
+
+        # Merge similarity and eye movement dataframes
+        if context_type == 'previous_context':
+            eye_move_df_filtered = eye_move_df.loc[eye_move_df['ianum'].isin(similarity_df['ianum'].tolist())
+                                          & eye_move_df['ia'].isin(similarity_df['ia'].tolist())
+                                          & eye_move_df['trialid'].isin(similarity_df['trialid'].tolist())]
+            eye_move_sim_df = pd.merge(eye_move_df_filtered, similarity_df[['trialid', 'ianum', 'similarity']], how='left',
+                                       on=['trialid', 'ianum'])
+            eye_move_sim_df.to_csv(eye_move_sim_filepath)
+        elif context_type == 'window':
+            type = 'saliency'
+            eye_move_sim_filepath = eye_move_sim_filepath.replace('_df.csv', f'_{type}_df.csv')
+            eye_move_sim_df = merge_eye_sim_window(similarity_df, eye_move_df, words_df, type=type)
+            eye_move_sim_df.to_csv(eye_move_sim_filepath)
+
+if __name__ == '__main__':
+    main()
