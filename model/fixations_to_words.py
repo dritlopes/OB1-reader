@@ -416,7 +416,6 @@ def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[
                 print(f"{fixation.saccade_type}")
                 # raise NotImplementedError()
 
-    df = WordLevelOutput.to_provo_dataframe(outputs)
-    df.to_csv('temp.csv')
+    # df = WordLevelOutput.to_provo_dataframe(outputs)
 
     return outputs

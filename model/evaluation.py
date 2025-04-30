@@ -1,4 +1,3 @@
-from fixations_to_words import WordLevelStatistics
 import pandas as pd
 import numpy as np
 from typing import Literal
