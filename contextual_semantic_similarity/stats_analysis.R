@@ -100,6 +100,8 @@ summary(model)
 model <- glmer(reread ~ similarity + surprisal + frequency + length + (1|participant_id) + (1|trialid), data=df, family="binomial")
 summary(model)
 
+
+
 # Next fixation chance (fixation data)
 model <- glmer(sac_out_target ~ similarity + surprisal + frequency + length + sqrt(distance^2) + (1|participant_id), data=df, family="binomial")
 summary(model)

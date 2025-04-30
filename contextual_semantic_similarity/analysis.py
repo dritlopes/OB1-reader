@@ -1,106 +1,16 @@
-from scipy import stats
-import pandas as pd
-import seaborn as sb
 import numpy as np
-import os
+import pandas as pd
+from scipy import stats
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import mean_squared_error
+from collections import defaultdict
 
-def correlate_eye2sim(layers, paths_to_data, measures, model_name, dir_to_save):
+from tensorflow.python.ops.resource_variable_ops import variable_accessed
 
-    print('Measuring correlation between similarity and eye movements...')
-
-    all_measures, all_coef, all_layers = [], [], []
-
-    for layer_combi, layer_combi_data in zip(layers, paths_to_data):
-
-        all_corr = []
-
-        eye_move_sim_df = pd.read_csv(layer_combi_data)
-        measures = [measure for measure in measures if measure in eye_move_sim_df.columns]
-
-        for measure in measures:
-            clean_df = eye_move_sim_df.dropna(subset=[measure, 'similarity'])
-            # take the mean of each eye mov measure for each word
-            mean_measure_df = clean_df.groupby(['trialid', 'ianum'], as_index=False)[measure].mean()
-            # take the mean contextual similarity for each word
-            mean_similarity_df = clean_df.groupby(['trialid', 'ianum'], as_index=False)['similarity'].mean()
-            # measure correlation between the two
-            cor = stats.pearsonr(mean_measure_df[measure].tolist(), mean_similarity_df['similarity'].tolist())
-            all_corr.append(cor)
-
-        # save the correlation values for each layer similarity
-        cor_df = pd.DataFrame({'measure': measures,
-                               'coefficient': [cor.statistic for cor in all_corr],
-                               'p-value': [cor.pvalue for cor in all_corr]})
-        cor_df.to_csv(f'{dir_to_save}/sim_{layer_combi}_{model_name}_pearsonr_corr.csv')
-        all_measures.extend(measures)
-        all_coef.extend([cor.statistic if not np.isnan(cor.statistic) else 0. for cor in all_corr])
-        all_layers.extend([layer_combi[0] for cor in all_corr]) # layer_combi = [n], n being the number of the layer
-
-    # make graph comparing the correlations across layers for each measure
-    graph = sb.pointplot(x=all_layers, y=all_coef, hue=all_measures)
-    graph.set_xticks(range(int(layers[0][0]), int(layers[-1][0])+1))
-    graph.set(xlabel='Layer', ylabel='PCC')
-    graph.get_figure().savefig(f'{dir_to_save}/pearson_corr_sim_{layers}_{model_name}.tiff', dpi=300)
-    plt.clf()
-
-def cross_validate(layers, paths_to_data, measures, model_name, dir_to_save, n=5, seed=1):
-
-    # save measures, correlations, and layers
-    all_measures, all_coef, all_layers = [], [], []
-
-    for layer_combi, layer_combi_data in zip(layers, paths_to_data):
-
-        # for specific layer, save correlations, which measures and which folds
-        all_corr, all_mea, all_folds = [], [], []
-
-        eye_move_sim_df = pd.read_csv(layer_combi_data)
-        measures = [measure for measure in measures if measure in eye_move_sim_df.columns]
-
-        for measure in measures:
-            clean_df = eye_move_sim_df.dropna(subset=[measure, 'similarity'])
-            # shuffle rows
-            shuffled_df = clean_df.sample(frac=1, random_state=seed)
-            # split rows into a number of folds for cross-validation
-            df_parts = np.array_split(shuffled_df, n)
-            for i, part in enumerate(df_parts):
-                # for each fold, compute correlation between mean eye mov measure and mean similarity per word
-                mean_measure_df = part.groupby(['trialid', 'ianum'], as_index=False)[measure].mean()
-                mean_similarity_df = part.groupby(['trialid', 'ianum'], as_index=False)['similarity'].mean()
-                cor = stats.pearsonr(mean_measure_df[measure].tolist(), mean_similarity_df['similarity'].tolist())
-                all_corr.append(cor)
-                all_folds.append(i)
-                all_mea.append(measure)
-
-        cor_df = pd.DataFrame({'measure': all_mea,
-                               'fold': all_folds,
-                               'coefficient': [cor.statistic if not np.isnan(cor.statistic) else 0. for cor in all_corr],
-                               'p-value': [cor.pvalue for cor in all_corr]})
-        cor_df.to_csv(f'{dir_to_save}/sim_{layer_combi}_{model_name}_pearsonr_corr_{n}_crossvalid.csv')
-        # compute mean correlation across folds for each measure for each layer
-        mean_cor_df = cor_df.groupby(['measure'], as_index=False)['coefficient'].mean()
-        # print(mean_cor_df)
-        # save measures for each layer
-        all_measures.extend(mean_cor_df['measure'].tolist())
-        # print(mean_cor_df['measure'].tolist())
-        # save correlations for each layer
-        all_coef.extend(mean_cor_df['coefficient'].tolist())
-        # print(mean_cor_df['coefficient'].tolist())
-        # save layer number
-        all_layers.extend([layer_combi[0] for cor in mean_cor_df['coefficient'].tolist()]) # layer_combi = [n], n being the number of the layer
-        # print([layer_combi[0] for cor in mean_cor_df['coefficient'].tolist()])
-
-    graph = sb.pointplot(x=all_layers, y=all_coef, hue=all_measures)
-    # print(all_layers)
-    # print(all_coef)
-    # print(all_measures)
-    graph.set_xticks(range(int(layers[0][0]), int(layers[-1][0]) + 1))
-    graph.set(xlabel='Layer', ylabel='PCC')
-    graph.get_figure().savefig(f'{dir_to_save}/pearson_corr_sim_{layers}_{model_name}_{n}_crossvalid_mean.tiff', dpi=300)
-    plt.clf()
 
 def check_saccade_length_distribution(eye_move_df, eye_move_filepath):
-
+    # Graph with distribution of saccade distances in fixation report
     # get sac lengths
     sac_len_counts = eye_move_df['sac.out.length'].value_counts()
     # save complete distribution of saccade lengths
@@ -114,83 +24,138 @@ def check_saccade_length_distribution(eye_move_df, eye_move_filepath):
     # filter dataframe with only saccade lengths within a range (-10 to +10 words)
     eye_move_df = eye_move_df[eye_move_df['sac.out.length'].isin(range(-10,11))]
     # create dist plot
-    graph = sb.displot(eye_move_df, x="sac.out.length", stat='probability', discrete=True)
+    graph = sns.displot(eye_move_df, x="sac.out.length", stat='probability', discrete=True)
     plt.xticks(range(-10,11))
     filepath = eye_move_filepath.replace('.csv', '_sac_length_distribution.tiff')
     graph.savefig(filepath, dpi=300)
     plt.clf()
 
 def check_similarity_distribution(eye_move_df, eye_move_filepath):
-
-    graph = sb.displot(eye_move_df, x="similarity", stat='probability')
+    # Graph with distribution of semantic similarity values
+    graph = sns.displot(eye_move_df, x="similarity", stat='probability')
     filepath = eye_move_filepath.replace('.csv', '_sim_distribution.tiff')
     graph.savefig(filepath, dpi=300)
     plt.clf()
     eye_move_df = eye_move_df[eye_move_df['distance'].isin(range(-3,4))]
-    graph = sb.displot(eye_move_df, x="similarity", hue="distance", kind="kde", palette="Set1")
+    graph = sns.displot(eye_move_df, x="similarity", hue="distance", kind="kde", palette="Set1")
     filepath = eye_move_filepath.replace('.csv', '_sim_length_distribution.tiff')
     graph.savefig(filepath, dpi=300)
+    plt.clf()
+
+def check_pred_distribution(saliency_df, variables, level, filepath):
+
+    saliency_df_filtered = saliency_df[saliency_df['saliency_type'].isin(variables)]
+    x_column = 'pred_end_relative_position'
+
+    if 'max' in variables[0] or 'min' in variables[0]:
+        if level == 'letter':
+            x_column = 'pred_end_letter_relative_position'
+        graph = sns.displot(saliency_df_filtered, x=x_column, hue="saliency_type",
+                            stat='probability', multiple='stack', palette='deep', discrete=True)
+        graph.savefig(filepath, dpi=300)
+
+    elif 'mass' in variables[0]:
+        if level == 'word':
+            graph = sns.displot(saliency_df_filtered, x=x_column, hue="saliency_type",
+                                stat='probability', multiple='stack', bins=[-3,-2,-1,0,1,2,3], palette="deep")
+            graph.savefig(filepath, dpi=300)
+
+    else:
+        raise Exception(f'Variable types {variables} not supported')
+
+    plt.clf()
+
+def evaluate_saliency(df, saliency_types, output_filepath, level='word'):
+
+    eval = defaultdict(list)
+    true_col = 'end_relative_position'
+    pred_col = 'pred_end_relative_position'
+
+    if level == 'letter':
+        true_col = 'end_letter_relative_position'
+        pred_col = 'pred_end_letter_relative_position'
+
+    for measure in saliency_types:
+
+        df_measure = df[df['saliency_type'] == measure]
+
+        for i, rows in df_measure.groupby('participant_id'):
+
+            rows_filtered = rows[rows[true_col].notna()]
+            rows_filtered = rows_filtered[rows_filtered[pred_col].notna()]
+            true_y = rows_filtered[true_col].tolist()
+            pred_y = rows_filtered[pred_col].tolist()
+
+            acc, rmse = None, None
+            if true_y and pred_y:
+                correct = np.sum([1 if i[0] == i[1] else 0 for i in zip(true_y, pred_y)])
+                acc = round(correct / len(true_y), 2)
+                rmse = round(mean_squared_error(true_y, pred_y), 2)
+
+            eval['participant_id'].append(i)
+            eval['saliency_type'].append(measure)
+            eval['acc'].append(acc)
+            eval['rmse'].append(rmse)
+
+    eval_df = pd.DataFrame.from_dict(eval)
+    eval_df.to_csv(output_filepath, index=False)
+
+    return eval_df
+
+def display_eval(eval_df, variables, filepath):
+
+    eval_df = eval_df[eval_df['saliency_type'].isin(variables)]
+
+    # Accuracy
+    if 'mass' not in variables[0]:
+        graph = sns.violinplot(x=eval_df['saliency_type'], y=eval_df['acc'])
+        plt.xticks(rotation=30)
+        plt.tight_layout()
+        graph.get_figure().savefig(f'{filepath.replace(".csv", f"_acc.tiff")}', dpi=300)
+        plt.clf()
+
+    # RMSE
+    graph = sns.violinplot(x=eval_df['saliency_type'], y=eval_df['rmse'])
+    plt.xticks(rotation=30)
+    plt.tight_layout()
+    graph.get_figure().savefig(f'{filepath.replace(".csv", f"_rmse.tiff")}', dpi=300)
     plt.clf()
 
 def main():
 
     corpus_name = 'meco'
     model_name = 'gpt2'
-    measures = ['dur', 'skip', 'reread']
-    n = 5  # number of folds for cross-validation evaluation
-    seed = 1  # seed to randomly sample trials for cross-validation
-    dir_to_save = f'data/analysed/{corpus_name}/{model_name}'
+    layers = '11'
 
-    # # Graphs with pearson correlations between semantic similarity with previous context and eye mov measures
-    layers = [[i] for i in range(12)]
-    # paths_to_data = []  # store path to files with data from each layer (combination) to be used for eval
-    # model_name = model_name.replace('/', '_')
-    # for layer_combi, layer_combi_data in zip(layers, paths_to_data):
-    #     eye_move_sim_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_{layer_combi}_{corpus_name}_previous_context_df.csv'
-    # correlate_eye2sim(layers, paths_to_data, measures, model_name, dir_to_save)
-    # cross_validate(layers, paths_to_data, measures, model_name, dir_to_save, n, seed)
-
-    # # Graph with distribution of saccade distances in fixation report
+    # # check saccade length distribution
     # eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv'
     # eye_move_df = pd.read_csv(eye_move_filepath)
     # check_saccade_length_distribution(eye_move_df, eye_move_filepath)
+    #
+    # # check semantic similarity values distribution
+    # full_data_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_[{layers}]_{corpus_name}_window_similarity_df.csv'
+    # full_df = pd.read_csv(full_data_filepath)
+    # check_similarity_distribution(full_df, full_data_filepath)
 
-    # Graph with distribution of semantic similarity values
-    full_data_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_[11]_{corpus_name}_window_similarity_df.csv'
-    full_df = pd.read_csv(full_data_filepath)
-    check_similarity_distribution(full_df, full_data_filepath)
+    # evaluate saliency
+    saliency_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{model_name}_[{layers}]_{corpus_name}.csv'
+    saliency_df = pd.read_csv(saliency_filepath)
+    for variable_combi in [['max_length', 'min_frequency', 'max_surprisal', 'min_semantic_similarity'],
+                            ['dist_max_length', 'dist_min_frequency', 'dist_max_surprisal', 'dist_min_semantic_similarity'],
+                            ['mass_length', 'mass_frequency', 'mass_surprisal', 'mass_semantic_similarity']]:
+        for level in ['word', 'letter']:
+            check_pred_distribution(saliency_df,
+                                    variables = variable_combi,
+                                    level = level,
+                                    filepath = f'data/analysed/pred_distr_{model_name}_{corpus_name}_{level}_{variable_combi}.tiff')
+            # add baselines
+            if 'next_word' not in variable_combi and '7letter_2right' not in variable_combi:
+                variable_combi.extend(['next_word','7letter_2right'])
+            eval_saliency_filepath = f'data/analysed/eval_{model_name}_{corpus_name}_{level}_{variable_combi}.csv'
+            eval_df = evaluate_saliency(saliency_df, variable_combi,
+                                        eval_saliency_filepath, level=level)
+            display_eval(eval_df, variable_combi, eval_saliency_filepath)
 
-    # Check correlation between semantic similarity and positional distance
-    # layers = [1,11]
-    # layers_n, contexts, coeffs, pvalues = [], [], [], []
-    # for layer in layers:
-    #     sim_df = pd.read_csv(f'data/processed/{corpus_name}/{model_name}/similarity_window_[{layer}]_{model_name}_{corpus_name}_df.csv')
-    #     # # convert distances -3 to +3 to only positive numbers (not sure what pearson does with negative numbers in the pot)
-    #     sim_df['distance_transformed'] = sim_df['distance'].map({-3:1, -2:2, -1:3, 1:4, 2:5, 3:6})
-    #     cor = stats.pearsonr(sim_df['similarity'].tolist(), sim_df['distance_transformed'].tolist())
-    #     coeffs.append(cor.statistic)
-    #     pvalues.append(cor.pvalue)
-    #     print(layer, cor.statistic, cor.pvalue)
-    #     # check correlation per position (left/right)
-    #     sim_left = sim_df[sim_df['distance'].isin([-3,-2,-1])].copy()
-    #     sim_left['distance'] = sim_left['distance'].map({-3:3,-2:2,-1:1})
-    #     cor = stats.pearsonr(sim_left['similarity'].tolist(), sim_left['distance'].tolist())
-    #     print('left', cor.statistic, cor.pvalue)
-    #     coeffs.append(cor.statistic)
-    #     pvalues.append(cor.pvalue)
-    #     sim_right = sim_df[sim_df['distance'].isin([1,2,3])]
-    #     cor = stats.pearsonr(sim_right['similarity'].tolist(), sim_right['distance'].tolist())
-    #     print('right', cor.statistic, cor.pvalue)
-    #     coeffs.append(cor.statistic)
-    #     pvalues.append(cor.pvalue)
-    #     layers_n.extend([layer, layer, layer])
-    #     contexts.extend(['both','left','right'])
-    # cor_df = pd.DataFrame({'layer': layers_n,
-    #                        'context': contexts,
-    #                        'coefficient': coeffs,
-    #                        'p-value': pvalues})
-    # cor_df.to_csv(
-    #     f'data/processed/{corpus_name}/{model_name}/pearsonr_corr_sim_dist_{layers}_{model_name}_{corpus_name}.csv')
 
 if __name__ == '__main__':
     main()

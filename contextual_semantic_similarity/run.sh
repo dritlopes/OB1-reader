@@ -14,4 +14,6 @@
 module load shared 2024
 module load 2024 PyTorch-bundle/2.1.2-foss-2023a-CUDA-12.1.1
 
-python $HOME/Text2KG/src/main.py
+python $HOME/Text2KG/src/process_corpus.py
+python $HOME/Text2KG/src/compute_surprisal.py
+python $HOME/Text2KG/src/compute_embeddings.py
