@@ -91,8 +91,8 @@ def add_lexicon(words:list,
             dir_path = os.path.dirname(lexicon_filepath)
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path)
-        with open(lexicon_filepath, 'wb') as outfile:
-            pickle.dump(lexicon, outfile)
+            with open(lexicon_filepath, 'wb') as outfile:
+                pickle.dump(lexicon, outfile)
 
     return lexicon
 
@@ -217,6 +217,7 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 previous_matrix_usable = True
 
         if previous_matrix_usable:
+            print('Loading previously saved inhibition matrix...')
             with open(matrix_filepath, "rb") as f:
                 word_inhibition_matrix = pickle.load(f)
                 return word_inhibition_matrix
@@ -322,12 +323,12 @@ class ReadingModel:
                  predictability_values: dict = None,
                  frequency_filepath:str = '',
                  predictability_filepath:str = '',
-                 lexicon_filepath: str = '../data/processed/lexicon.pkl',
-                 matrix_filepath: str = '../data/processed/inhibition_matrix.pkl',
-                 matrix_parameters_filepath: str = '../data/processed/inhibition_parameters.pkl',
+                 lexicon_filepath: str = '',
+                 matrix_filepath: str = '',
+                 matrix_parameters_filepath: str = '',
                  include_predicted_without_frequencies: bool = False,
-                 save_lexicon: bool = True,
-                 save_word_inhibition: bool = True,
+                 save_lexicon: bool = False,
+                 save_word_inhibition: bool = False,
                  verbose: bool = True
                  ):
 
