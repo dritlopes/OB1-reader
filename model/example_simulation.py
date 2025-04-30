@@ -1,12 +1,21 @@
 from model import ReadingModel
+from model_components import FixationOutput
+from evaluation import evaluate, extract_sentences
 
-text = ("There are now rumblings that Apple might soon invade the smart watch space, though the company is maintaining its customary silence. "
-        "The watch doesn't have a microphone or speaker, but you can use it to control the music on your phone. "
-        "You can glance at the watch face to view the artist and title of a song.")
+# text ids from eye-tracking corpus
+text_ids = [1,2,3]
+
+# "meco" or "provo"
+dataset_name = "provo"
+
+# input text_ids for texting list of sentences in the corpus
+texts = extract_sentences(dataset_name, text_ids = text_ids)
 
 # initialize model with default config
-model = ReadingModel([text])
+model = ReadingModel(texts)
 
 # run reading simulation
-output = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv')
+output:list[list[list[FixationOutput]]] = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv', number_of_simulations=2, verbose=False)
 
+# evaluate model output
+evaluate(output, dataset_name, text_ids = text_ids)
