@@ -21,11 +21,11 @@ def check_saccade_length_distribution(eye_move_df, eye_move_filepath):
     # # find top 10 most frequent saccade lengths
     # most_freq = sac_len_counts.head(15).index.tolist()
     # print(most_freq)
-    # filter dataframe with only saccade lengths within a range (-10 to +10 words)
-    eye_move_df = eye_move_df[eye_move_df['sac.out.length'].isin(range(-10,11))]
+    # filter dataframe with only saccade lengths within a range
+    eye_move_df = eye_move_df[eye_move_df['sac.out.length'].isin(range(-10,+10))]
     # create dist plot
     graph = sns.displot(eye_move_df, x="sac.out.length", stat='probability', discrete=True)
-    plt.xticks(range(-10,11))
+    plt.xticks(range(-10,10))
     filepath = eye_move_filepath.replace('.csv', '_sac_length_distribution.tiff')
     graph.savefig(filepath, dpi=300)
     plt.clf()
@@ -42,30 +42,34 @@ def check_similarity_distribution(eye_move_df, eye_move_filepath):
     graph.savefig(filepath, dpi=300)
     plt.clf()
 
+def check_true_distribution(saliency_df, model_name, corpus_name):
+
+    graph = sns.displot(saliency_df, x="end_relative_position",
+                        stat='probability', multiple='stack', palette='deep', discrete=True)
+    graph.savefig(f'data/analysed/true_distr_{model_name}_{corpus_name}_word.tiff', dpi=300)
+    plt.clf()
+
+    graph = sns.displot(saliency_df, x="end_letter_relative_position",
+                        stat='probability', multiple='stack', palette='deep', discrete=True)
+    graph.savefig(f'data/analysed/true_distr_{model_name}_{corpus_name}_letter.tiff', dpi=300)
+    plt.clf()
+
 def check_pred_distribution(saliency_df, variables, level, filepath):
 
     saliency_df_filtered = saliency_df[saliency_df['saliency_type'].isin(variables)]
+
     x_column = 'pred_end_relative_position'
+    if level == 'letter':
+        x_column = 'pred_end_letter_relative_position'
 
-    if 'max' in variables[0] or 'min' in variables[0]:
-        if level == 'letter':
-            x_column = 'pred_end_letter_relative_position'
-        graph = sns.displot(saliency_df_filtered, x=x_column, hue="saliency_type",
-                            stat='probability', multiple='stack', palette='deep', discrete=True)
-        graph.savefig(filepath, dpi=300)
-
-    elif 'mass' in variables[0]:
-        if level == 'word':
-            graph = sns.displot(saliency_df_filtered, x=x_column, hue="saliency_type",
-                                stat='probability', multiple='stack', bins=[-3,-2,-1,0,1,2,3], palette="deep")
-            graph.savefig(filepath, dpi=300)
-
-    else:
-        raise Exception(f'Variable types {variables} not supported')
+    graph = sns.displot(saliency_df_filtered, x=x_column, hue="saliency_type",
+                            stat='probability', multiple='stack', bins=[-3,-2,-1,0,1,2,3,4], palette="deep")
+    plt.xticks([-3,-2,-1,0,1,2,3]) # remove bin edge 4
+    graph.savefig(filepath, dpi=300)
 
     plt.clf()
 
-def evaluate_saliency(df, saliency_types, output_filepath, level='word'):
+def evaluate_saliency(df:pd.DataFrame, saliency_types:list[str], output_filepath:str, level:str='word'):
 
     eval = defaultdict(list)
     true_col = 'end_relative_position'
@@ -126,6 +130,7 @@ def main():
     corpus_name = 'meco'
     model_name = 'gpt2'
     layers = '11'
+    data_split = 'validation'
 
     # # check saccade length distribution
     # eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv'
@@ -138,23 +143,28 @@ def main():
     # check_similarity_distribution(full_df, full_data_filepath)
 
     # evaluate saliency
-    saliency_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{model_name}_[{layers}]_{corpus_name}.csv'
+    saliency_types = [['max_length', 'min_frequency', 'max_surprisal', 'min_semantic_similarity', 'combi_len_sur_en_ss'],
+                     ['dist_max_length', 'dist_min_frequency', 'dist_max_surprisal', 'dist_min_semantic_similarity', 'combi_dist_len_sur_en_ss'],
+                     ['mass_length', 'mass_frequency', 'mass_surprisal', 'mass_semantic_similarity', 'combi_mass_len_sur_en_ss'],
+                      ['combi_len_sur_en_ss'],
+                      ['combi_dist_len_sur_en_ss'],
+                      ['combi_mass_len_sur_en_ss']]
+
+    saliency_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{model_name}_[{layers}]_{corpus_name}_{data_split}.csv'
     saliency_df = pd.read_csv(saliency_filepath)
-    for variable_combi in [['max_length', 'min_frequency', 'max_surprisal', 'min_semantic_similarity'],
-                            ['dist_max_length', 'dist_min_frequency', 'dist_max_surprisal', 'dist_min_semantic_similarity'],
-                            ['mass_length', 'mass_frequency', 'mass_surprisal', 'mass_semantic_similarity']]:
+    check_true_distribution(saliency_df, model_name, corpus_name)
+
+    for variable_combi in saliency_types:
         for level in ['word', 'letter']:
             check_pred_distribution(saliency_df,
                                     variables = variable_combi,
                                     level = level,
-                                    filepath = f'data/analysed/pred_distr_{model_name}_{corpus_name}_{level}_{variable_combi}.tiff')
-            # add baselines
-            if 'next_word' not in variable_combi and '7letter_2right' not in variable_combi:
-                variable_combi.extend(['next_word','7letter_2right'])
-            eval_saliency_filepath = f'data/analysed/eval_{model_name}_{corpus_name}_{level}_{variable_combi}.csv'
-            eval_df = evaluate_saliency(saliency_df, variable_combi,
+                                    filepath = f'data/analysed/pred_distr_{model_name}_{corpus_name}_{level}_{variable_combi}_{data_split}.tiff')
+            eval_saliency_filepath = f'data/analysed/eval_{model_name}_{corpus_name}_{level}_{variable_combi}_{data_split}.csv'
+            all_variables = variable_combi + ['next_word', '7letter_2right']
+            eval_df = evaluate_saliency(saliency_df, all_variables,
                                         eval_saliency_filepath, level=level)
-            display_eval(eval_df, variable_combi, eval_saliency_filepath)
+            display_eval(eval_df, all_variables, eval_saliency_filepath)
 
 
 if __name__ == '__main__':

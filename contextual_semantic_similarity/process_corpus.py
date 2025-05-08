@@ -132,6 +132,12 @@ class ProvoData:
 
     def pre_process_data(self):
 
+        """
+        Pre-process word-based data from provo.
+        Returns: pre-processed data
+
+        """
+
         df = pd.read_csv(self.filepath, encoding="ISO-8859-1")
 
         # select columns
@@ -191,6 +197,12 @@ class ProvoData:
         return self.data
 
     def pre_process_fixation_data(self):
+
+        """
+        Pre-process fixation data from provo.
+        Returns: pre-processed fixation data.
+
+        """
 
         df = pd.read_csv(self.filepath, encoding="ISO-8859-1")
 
@@ -266,6 +278,11 @@ class MecoData:
 
     def pre_process_data(self):
 
+        """
+        Pre-process word-based English data from MECO.
+        Returns: pre-processed word-based English data.
+
+        """
         # convert fixation report to csv
         if self.filepath.endswith('.rda'):
             self.filepath = self._convert_rdm_to_csv(self.filepath)
@@ -279,7 +296,7 @@ class MecoData:
         # removed unnamed columns if existent
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 
-        #select columns
+        # select columns
         df = df[['uniform_id', 'trialid', 'ia', 'ianum', 'reread', 'dur', 'reg.in', 'reg.out', 'skip', 'singlefix', 'firstrun.dur', 'firstfix.dur']]
 
         # drop rows with empty word
@@ -314,6 +331,12 @@ class MecoData:
         return self.data
 
     def pre_process_fixation_data(self):
+
+        """
+        Pre-process fixation English data from MECO.
+        Returns: pre-processed fixation data.
+
+        """
 
         df = pd.read_csv(self.filepath)
 
@@ -360,7 +383,7 @@ class MecoData:
         self.data = df
         return self.data
 
-def add_trial_ids_to_provo(fixation_df, words_df):
+def add_trial_ids_to_provo(fixation_df, words_df)->pd.DataFrame:
 
     """
     Add trial ids to Provo fixation dataframe.
@@ -409,7 +432,19 @@ def add_trial_ids_to_provo(fixation_df, words_df):
 
     return fixation_df
 
-def add_variables(variables:list[str], df:pd.DataFrame, corpus_name:str, frequency_filepath:str):
+def add_variables(variables:list[str], df:pd.DataFrame, corpus_name:str, frequency_filepath:str)->pd.DataFrame:
+
+    """
+    Add length, frequency and pos-tag to eye-tracking dataframe.
+    Args:
+        variables: list of possible variables (length, frequency, pos-tag).
+        df: dataframe with eye-tracking data
+        corpus_name: name of eye-tracking corpus
+        frequency_filepath: filepath to frequency resource
+
+    Returns: dataframe with eye-tracking data and variables added as columns.
+
+    """
 
     if 'length' in variables:
         # add length and frequency
@@ -485,12 +520,23 @@ def check_alignment(words_df: pd.DataFrame, eye_df: pd.DataFrame):
 
 def main():
 
-    texts_filepath = 'data/raw/meco/supp_texts.csv'  # 'data/raw/Provo/Provo_Corpus-Predictability_Norms.csv' # 'data/raw/meco/supp_texts.csv'
-    eye_move_filepath = 'data/raw/meco/joint_fix_trimmed.csv'  # 'data/raw/Provo/Provo_Corpus-Eyetracking_Data.csv' # data/raw/Provo/Provo_Corpus-Additional_Eyetracking_Data-Fixation_Report.csv # 'data/raw/meco/joint_fix_trimmed.rda' # data/raw/meco/joint_data_trimmed.rda
-    frequency_filepath = 'data/raw/meco/wordlist_meco.csv'  # 'data/raw/Provo/SUBTLEX_UK.txt' # 'data/raw/meco/wordlist_meco.csv'
-    corpus_name = 'meco'  # 'Provo' 'meco' # TODO run pre-process fixation report from Provo
+    """
+    Process corpus files.
+    Returns: write out two processed files: one with each word as row (for further computation of surprisal and semantic_similarity), and another with the eye-tracking data.
+    """
+
+    # file with texts from corpus
+    texts_filepath = 'data/raw/meco/supp_texts.csv'  # 'data/raw/Provo/Provo_Corpus-Predictability_Norms.csv'
+    # file with eye-tracking data
+    eye_move_filepath = 'data/raw/meco/joint_fix_trimmed.csv'  # data/raw/Provo/Provo_Corpus-Additional_Eyetracking_Data-Fixation_Report.csv
+    # file with word frequency resource
+    frequency_filepath = 'data/raw/meco/wordlist_meco.csv'  # 'data/raw/Provo/SUBTLEX_UK.txt'
+    # corpus name
+    corpus_name = 'meco'  # 'Provo' # TODO run pre-process fixation report from Provo
+    # filepath to save out pre-processed word data
     words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'
-    processed_eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv'  # corpus_{language}_df.csv if word-based data; fixation_report_{language}_df if fixation report
+    # filepath to save out pre-processed eye-tracking data
+    processed_eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv' # corpus_{language}_df.csv if word-based data; fixation_report_{language}_df if fixation report
 
     # Word Data
     print('Pre-processing dataframe with texts...')

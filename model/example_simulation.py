@@ -1,11 +1,10 @@
 from model import ReadingModel
+from model_components import FixationOutput
 
-text = ("There are now rumblings that Apple might soon invade the smart watch space, though the company is maintaining its customary silence. "
-        "The watch doesn't have a microphone or speaker, but you can use it to control the music on your phone. "
-        "You can glance at the watch face to view the artist and title of a song.")
+texts = ['He likes you.']
 
 # initialize model with default config
-model = ReadingModel([text])
+model = ReadingModel(texts)
 
 # run reading simulation
-output = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv')
+output:list[list[list[FixationOutput]]] = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv', number_of_simulations=1, verbose=False)

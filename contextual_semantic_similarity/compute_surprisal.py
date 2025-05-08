@@ -111,12 +111,12 @@ def main():
 
     corpus_name = 'meco' # provo
     model_name = 'gpt2' # meta-llama_Llama-2-7b-hf
-    model_name_dir = model_name.replace('/', '_')
+    model_name_dir = model_name.replace('/', '_') # needed if model is llama
     model_token = '' # needed if model is llama
+    words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'  # word dataset which we compute surprisal values for
+    eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv'  # corpus dataset with eye-movement data
     surprisal_filepath = f'data/processed/{corpus_name}/{model_name_dir}/surprisal_{model_name_dir}_{corpus_name}_df.csv' # where to save the surprisal values
-    words_filepath = f'data/processed/{corpus_name}/words_en_df.csv' # word dataset which we compute surprisal values for
-    eye_move_filepath = f'data/processed/{corpus_name}/fixation_report_en_df.csv' # corpus dataset with eye-movement data
-    eye_surprisal_filepath = f'data/processed/{corpus_name}/{model_name_dir}/fixation_report_{corpus_name}_surprisal_{model_name_dir}.csv' # corpus data set with surprisal values
+    eye_surprisal_filepath = f'data/processed/{corpus_name}/{model_name_dir}/fixation_report_{corpus_name}_surprisal_{model_name_dir}.csv' # where to save corpus data set with surprisal values
 
     # if surprisal dataframe already exists, simply read it in
     if os.path.exists(surprisal_filepath):
