@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import mean_squared_error
 from collections import defaultdict
-
 from tensorflow.python.ops.resource_variable_ops import variable_accessed
 
 
@@ -94,7 +93,7 @@ def evaluate_saliency(df:pd.DataFrame, saliency_types:list[str], output_filepath
             if true_y and pred_y:
                 correct = np.sum([1 if i[0] == i[1] else 0 for i in zip(true_y, pred_y)])
                 acc = round(correct / len(true_y), 2)
-                rmse = round(mean_squared_error(true_y, pred_y), 2)
+                rmse = round(np.sqrt(mean_squared_error(true_y, pred_y)), 2)
 
             eval['participant_id'].append(i)
             eval['saliency_type'].append(measure)
@@ -143,12 +142,7 @@ def main():
     # check_similarity_distribution(full_df, full_data_filepath)
 
     # evaluate saliency
-    saliency_types = [['max_length', 'min_frequency', 'max_surprisal', 'min_semantic_similarity', 'combi_len_sur_en_ss'],
-                     ['dist_max_length', 'dist_min_frequency', 'dist_max_surprisal', 'dist_min_semantic_similarity', 'combi_dist_len_sur_en_ss'],
-                     ['mass_length', 'mass_frequency', 'mass_surprisal', 'mass_semantic_similarity', 'combi_mass_len_sur_en_ss'],
-                      ['combi_len_sur_en_ss'],
-                      ['combi_dist_len_sur_en_ss'],
-                      ['combi_mass_len_sur_en_ss']]
+    saliency_types = [['combi_len_sur_en_ss']]
 
     saliency_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{model_name}_[{layers}]_{corpus_name}_{data_split}.csv'
     saliency_df = pd.read_csv(saliency_filepath)

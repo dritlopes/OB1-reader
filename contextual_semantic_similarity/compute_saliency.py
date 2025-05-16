@@ -3,24 +3,6 @@ import numpy as np
 from collections import defaultdict
 import math
 
-def split_data(eye_data, words_data, split=.7):
-
-    all_text_ids = words_data['trialid'].unique().tolist()
-    index = int(len(all_text_ids)*split)
-    val_text_ids = all_text_ids[:index]
-    test_text_ids = all_text_ids[index:]
-
-    eye_data_copy = eye_data.copy()
-    words_data_copy = words_data.copy()
-
-    # split eye-tracking and word data based on text ids
-    val_eye_data = eye_data_copy[eye_data['trialid'].isin(val_text_ids)]
-    val_words_data = words_data_copy[words_data['trialid'].isin(val_text_ids)]
-    test_eye_data = eye_data_copy[eye_data['trialid'].isin(test_text_ids)]
-    test_words_data = words_data_copy[words_data['trialid'].isin(test_text_ids)]
-
-    return val_eye_data, val_words_data, test_eye_data, test_words_data
-
 def compute_letter_map(words_df):
 
     # map each word in each text to its letter indices at the text level
@@ -36,51 +18,78 @@ def compute_letter_map(words_df):
 
     return letter_map
 
-def find_letter_distance_2centre_of_context_word(context_word, letter_map, centre_next_word = None):
+def find_letter_distance_to_fixation(context, letter_map):
 
-    # TODO compute centre_next_word
+    centre_let_pos_context_word = None
+    for context_word in context.itertuples():
+        if context_word.distance == 1:
+            all_let_pos_context_word = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
+            if all_let_pos_context_word:
+                centre_let_pos_context_word = all_let_pos_context_word[
+                    math.ceil(len(all_let_pos_context_word) / 2) - 1]
+    return centre_let_pos_context_word
+
+def find_letter_distance_2centre_of_context_word(context_word, letter_map, shifted_centre = None):
+
     # compute distance in letters from fixated letter to the centre of context word
     all_let_pos_context_word = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
     if all_let_pos_context_word:
         centre_let_pos_context_word = all_let_pos_context_word[math.ceil(len(all_let_pos_context_word) / 2) - 1]
-        if centre_next_word: # reference point is the centre of next word (to skew attention to n+1)
-            let_pos_fix_word = centre_next_word
+        if shifted_centre: # reference point is the centre of next word (to skew attention to n+1)
+            let_pos_fix_word = shifted_centre
         else: # reference point is letter being fixated
             let_pos_fix_word = context_word.letternum
-        letter_distance = centre_let_pos_context_word - let_pos_fix_word + 1 # + 1 to skew centre to the right
+        letter_distance = centre_let_pos_context_word - let_pos_fix_word
     else:
         raise ValueError(f'{context_word.trialid},{context_word.context_ianum} is empty in letter map \n {context_word}')
 
     return letter_distance
 
-def baseline_7letter_2right(context, letter_map):
+def find_letter_distances(context, letter_map):
+
+    letter_distances = []
+    # because we consider the centre of n+1 as reference point (instead of letter being fixated at n)
+    # this is done to ensure the centre of fixations becomes n+1 instead of n
+    centre_let_pos_context_word = find_letter_distance_to_fixation(context, letter_map)
+
+    for context_word in context.itertuples():
+        letter_distance = find_letter_distance_2centre_of_context_word(context_word, letter_map,
+                                                                       shifted_centre=centre_let_pos_context_word)
+        letter_distances.append(letter_distance)
+
+    return letter_distances
+
+def baseline_7letter_2right(context, letter_map, level_type):
 
     # word predicted is 7 letters to the right of the fixated letter,
     # and logically the letter predicted is 7 letters to the right of fixated letter
 
-    # optimal saccade distance visual field
-    distance_letter7_2right = 7.0
     # which word is 7 letters to the right of fixated letter
-    word_letter7_2right = None
-    # position of letter being fixated
-    fix_letter = context['letternum'].tolist()[0]
-    # find position of letter 7 letter positions to the right of the letter being fixated
-    letter7_2right = fix_letter + distance_letter7_2right
+    pos_letter7_2right = None
+    if level_type == 'letter':
+        pos_letter7_2right = 7.0
+    else:
+        # optimal saccade distance visual field
+        distance_letter7_2right = 7.0
+        # position of letter being fixated
+        fix_letter = context['letternum'].tolist()[0]
+        # find position of letter 7 letter positions to the right of the letter being fixated
+        letter7_2right = fix_letter + distance_letter7_2right
 
-    for context_word in context.itertuples():
-        # find letter positions of context word
-        let_positions = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
-        # check if the letter position 7 letters to the right is in this context word
-        if letter7_2right in let_positions:
-            word_letter7_2right = context_word.distance
+        for context_word in context.itertuples():
+            # find letter positions of context word
+            let_positions = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
+            # check if the letter position 7 letters to the right is in this context word
+            if letter7_2right in let_positions:
+                pos_letter7_2right = context_word.distance
 
-    return word_letter7_2right, distance_letter7_2right
+    return pos_letter7_2right
 
-def winner_takes_all(context, letter_map, feature, condition, weight_type='raw'):
+def winner_takes_all(context, letter_map, level_type, feature, condition, weight_type='raw'):
 
-    winner_score, winner, winner_pos, winner_let_pos = None, None, None, None
-    distance_weights_max = {-3:.25, -2:.50, -1:.75, 0:1, 1:1, 2:.75, 3:.5}
-    distance_weights_min = {-3:1, -2:.75, -1:.50, 0:.25, 1:.25, 2:.50, 3:.75}
+    winner_score, winner, winner_pos = None, None, None
+    distance_weights_max = {-3:.25, -2:.50, -1:.75, 0:.75, 1:1, 2:.75, 3:.5}
+    distance_weights_min = {-3:1, -2:.75, -1:.50, 0:.50, 1:.25, 2:.50, 3:.75}
 
     # print('Fix word: ', context['ia'].tolist()[0])
     for i, context_word in context.iterrows():
@@ -106,19 +115,17 @@ def winner_takes_all(context, letter_map, feature, condition, weight_type='raw')
                 winner = context_word
 
     if winner is not None:
-        winner_pos = winner.distance
-        winner_let_pos = find_letter_distance_2centre_of_context_word(winner, letter_map)
+        if level_type == 'letter':
+            winner_pos = find_letter_distance_2centre_of_context_word(winner, letter_map)
+        else:
+            winner_pos = winner.distance
+
     # print('Winner: ', winner)
     # print('Winner position: ', winner_pos, winner_let_pos)
 
-    return winner_pos, winner_let_pos
+    return winner_pos
 
 def centre_of_mass(saliencies, positions):
-
-    # print(saliencies)
-    # print(positions)
-    # print([saliency*position for saliency,position in zip(saliencies,positions)])
-    # print(1/np.sum(saliencies))
 
     return (1/np.sum(saliencies))*np.sum([saliency*position for saliency,position in zip(saliencies,positions)])
 
@@ -133,32 +140,40 @@ def normalize(all_values):
         norm = None
         if x:
             norm = (x - min_feature) / (max_feature - min_feature)
+            if norm == 0.0:
+                norm = .0001 # to avoid 0 for minimum
         norm_feature.append(norm)
 
     return norm_feature
 
-def compute_combi_len_ss(context, ep=1., weight_type='raw'):
+def compute_combi_len_ss(context, pos_letter7_2right, x=None, mapping_type='raw'):
 
     scores = []
+    letter7_2right = 0.
     distance_weights = {-3: .25, -2: .50, -1: .75, 0: .75, 1: 1, 2: .75, 3: .5}
+
+    if not x:
+        x = [1., 1., 1., 1., 1.]
 
     for context_word in context.itertuples():
 
         features = {'similarity': context_word.similarity,
                     'entropy': context_word.norm_entropy,
-                    'length': context_word.length,
-                    'surprisal': context_word.surprisal}
+                    'length': context_word.norm_length,
+                    'surprisal': context_word.norm_surprisal}
 
-        # to account for normalization starting from 0
-        for k,v in features.items():
-            if v == 0.0:
-                features[k] = .0001
+        if context_word.distance == pos_letter7_2right:
+            letter7_2right = 1.
 
         # compute combi
         if not np.isnan(list(features.values())).any():
-            score = (1 / (features['similarity'] / features['length'])) + (features['entropy']*ep) + features['surprisal']
+            score = ((-context_word.similarity * x[0])
+                         + (context_word.norm_length * x[1])
+                         + (context_word.norm_surprisal * x[2])
+                         + (context_word.norm_entropy * x[3])
+                         + (letter7_2right * x[4]))
             # weight by distance
-            if weight_type == 'distance':
+            if mapping_type == 'distance':
                 score = score * distance_weights[context_word.distance]
         else:
             score = np.nan
@@ -166,25 +181,7 @@ def compute_combi_len_ss(context, ep=1., weight_type='raw'):
 
     return scores
 
-def compute_saliency(df, words_df, filepath):
-
-    saliency_types = ['next_word',
-                      '7letter_2right',
-                      'max_length',
-                      'min_frequency',
-                      'max_surprisal',
-                      'min_semantic_similarity',
-                      'mass_length',
-                      'mass_frequency',
-                      'mass_surprisal',
-                      'mass_semantic_similarity',
-                      'dist_max_length',
-                      'dist_min_frequency',
-                      'dist_max_surprisal',
-                      'dist_min_semantic_similarity',
-                      'combi_len_sur_en_ss',
-                      'combi_mass_len_sur_en_ss',
-                      'combi_dist_len_sur_en_ss']
+def compute_saliency(df, filepath, saliency_types, letter_map, level_type='word', weights=None, normalize_predictions=False):
 
     saliency_variables = {'participant_id': [],
                           'text_id': [],
@@ -193,21 +190,9 @@ def compute_saliency(df, words_df, filepath):
                           'start_position' : [],
                           'end_ia': [],
                           'end_position' : [],
-                          'end_relative_position': [],
-                          'end_letter_relative_position': [],
                           'saliency_type': [],
-                          'pred_end_relative_position': [],
-                          'pred_end_letter_relative_position': []}
-
-    # find index of all letters in each word in each text
-    letter_map = compute_letter_map(words_df)
-
-    # normalize variables for combination computation
-    for feature in ['length', 'entropy', 'surprisal']:
-        norm_feature = normalize(df[feature].tolist())
-        df[f'norm_{feature}'] = norm_feature
-    # convert entropy values from previous context to 1
-    df['norm_entropy'] = df.apply(lambda x: 1. if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis = 1)
+                          'end_relative_position': [],
+                          'pred_end_relative_position': []}
 
     # iter through each fixation
     for i, context in df.groupby(['participant_id','trialid','fixid']):
@@ -227,71 +212,78 @@ def compute_saliency(df, words_df, filepath):
                 if context_word.landing_target:
                     saliency_variables['end_position'].append(context_word.context_ianum)
                     saliency_variables['end_ia'].append(context_word.context_ia)
-                    saliency_variables['end_relative_position'].append(context_word.distance)
-                    saliency_variables['end_letter_relative_position'].append(context_word.letter_distance)
+                    if level_type == 'letter':
+                        saliency_variables['end_relative_position'].append(context_word.letter_distance)
+                    else:
+                        saliency_variables['end_relative_position'].append(context_word.distance)
+
+            # for computation of saliency formula
+            pos_letter7_2right = baseline_7letter_2right(context, letter_map, level_type='word')
 
             # compute end relative position using saliency
-            pred_end_relative_position, pred_end_letter_relative_position = None, None
+            pred_end_relative_position = None
 
             # baseline n+1
             if variable == 'next_word':
                 pred_end_relative_position = 1
-                letter_distance = None
-                for context_word in context.itertuples():
-                    if context_word.distance == 1:
-                        letter_distance = find_letter_distance_2centre_of_context_word(context_word, letter_map)
-                pred_end_letter_relative_position = letter_distance
+                if level_type == 'letter':
+                    letter_distance = None
+                    for context_word in context.itertuples():
+                        if context_word.distance == 1:
+                            letter_distance = find_letter_distance_2centre_of_context_word(context_word, letter_map)
+                    pred_end_relative_position = letter_distance
 
             # baseline 7 letters to right of center of fixation
             elif variable == '7letter_2right':
-                pred_end_relative_position, pred_end_letter_relative_position = baseline_7letter_2right(context, letter_map)
+                pred_end_relative_position = baseline_7letter_2right(context, letter_map, level_type)
 
             # longest word wins
             elif variable == 'max_length':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map,
-                                                                                                feature ='length',
-                                                                                                condition="max")
+                pred_end_relative_position = winner_takes_all(context, letter_map, level_type,
+                                                              feature='length', condition="max")
+
             # longest word weighted by distance
             elif variable == 'dist_max_length':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map, level_type,
                                                                                                   feature='length',
                                                                                                   condition="max",
                                                                                                   weight_type='distance')
             # less frequent word wins
             elif variable == 'min_frequency':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map, level_type,
                                                                                                 feature ='frequency',
                                                                                                 condition="min")
             # less frequent weighted by distance
             elif variable == 'dist_min_frequency':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map, level_type,
                                                                             feature='frequency',
                                                                             condition="min",
                                                                             weight_type='distance')
             # more surprising word wins
             elif variable == 'max_surprisal':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map, level_type,
                                                                                                 feature ='surprisal',
                                                                                                 condition="max")
             # more surprising weighted by distance
             elif variable == 'dist_max_surprisal':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context, letter_map, level_type,
                                                                                                 feature='surprisal',
                                                                                                 condition="max",
                                                                                                 weight_type='distance')
             # less similar word wins
             elif variable == 'min_semantic_similarity':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map, level_type,
                                                                                                  feature ='similarity',
                                                                                                  condition="min")
             # less similar weighted by distance
             elif variable == 'dist_min_semantic_similarity':
-                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map,
+                pred_end_relative_position, pred_end_letter_relative_position = winner_takes_all(context,letter_map, level_type,
                                                                                                  feature ='similarity',
                                                                                                  condition="min",
                                                                                                  weight_type='distance')
 
             # centre of mass
+            # TODO adjust positions and add letter positions
             elif variable == 'mass_length':
                 pred_end_relative_position = centre_of_mass(context['length'].tolist(), context['distance'].tolist())
             elif variable == 'mass_frequency':
@@ -303,84 +295,76 @@ def compute_saliency(df, words_df, filepath):
 
             # combination of length, surprisal, entropy and semantic similarity
             elif variable == 'combi_len_sur_en_ss':
-                pred_end_relative_position, pred_end_letter_relative_position = None, None
-                scores = compute_combi_len_ss(context, ep=.5)
+                pred_end_relative_position= None
+                scores = compute_combi_len_ss(context, pos_letter7_2right, weights)
                 if not np.isnan(scores).any(): # only predict if all words in context have saliency scores
                     winner_word = context.iloc[scores.index(max(scores))]
                     pred_end_relative_position = winner_word['distance']
-                    pred_end_letter_relative_position = find_letter_distance_2centre_of_context_word(winner_word,
-                                                                                                     letter_map)
-                    # print(f'context: {" ".join([row.context_ia for row in context.itertuples()])}')
-                    # print(f'fixated word: {context["ia"].tolist()[0]}')
-                    # print(f'norm_length: {context["norm_length"].tolist()}')
-                    # print(f'norm_entropy: {context["norm_entropy"].tolist()}')
-                    # print(f'norm_surprisal: {context["norm_surprisal"].tolist()}')
-                    # print(f'similarity: {context["similarity"].tolist()}')
-                    # print(f'saliency scores: {scores}')
-                    # print(f'winner word: {winner_word["context_ia"]}')
-                    # print(f'predicted end relative word position: {pred_end_relative_position}')
-                    # print(f'predicted end relative letter position: {pred_end_letter_relative_position}')
-                    # exit()
+                    if level_type == 'letter':
+                        pred_end_relative_position = find_letter_distance_2centre_of_context_word(winner_word,
+                                                                                                         letter_map)
 
             elif variable == 'combi_dist_len_sur_en_ss':
-                pred_end_relative_position, pred_end_letter_relative_position = None, None
-                scores = compute_combi_len_ss(context, ep=.5, weight_type='distance')
+                pred_end_relative_position = None
+                scores = compute_combi_len_ss(context, pos_letter7_2right, weights, mapping_type='distance')
                 if not np.isnan(scores).any():  # only predict if all words in context have saliency scores
                     winner_word = context.iloc[scores.index(max(scores))]
                     pred_end_relative_position = winner_word['distance']
-                    pred_end_letter_relative_position = find_letter_distance_2centre_of_context_word(winner_word,
+                    if level_type == 'letter':
+                        pred_end_relative_position = find_letter_distance_2centre_of_context_word(winner_word,
                                                                                                      letter_map)
-                    # print(f'context: {" ".join([row.context_ia for row in context.itertuples()])}')
-                    # print(f'fixated word: {context["ia"].tolist()[0]}')
-                    # print(f'norm_length: {context["norm_length"].tolist()}')
-                    # print(f'norm_entropy: {context["norm_entropy"].tolist()}')
-                    # print(f'norm_surprisal: {context["norm_surprisal"].tolist()}')
-                    # print(f'similarity: {context["similarity"].tolist()}')
-                    # print(f'saliency scores: {scores}')
-                    # print(f'winner word: {winner_word["context_ia"]}')
-                    # print(f'predicted end relative word position: {pred_end_relative_position}')
-                    # print(f'predicted end relative letter position: {pred_end_letter_relative_position}')
-                    # exit()
 
             elif variable == 'combi_mass_len_sur_en_ss':
-                pred_end_relative_position, pred_end_letter_relative_position = None, None
-                scores = compute_combi_len_ss(context)
+                pred_end_relative_position = None
+                scores = compute_combi_len_ss(context, pos_letter7_2right, weights)
                 word_distances = [position - 1 for position in context['distance'].tolist()]
                 # find letter distances to fixation
-                letter_distances = []
-                for context_word in context.itertuples():
-                    letter_distance = find_letter_distance_2centre_of_context_word(context_word, letter_map)
-                    letter_distances.append(letter_distance)
+                letter_distances = find_letter_distances(context, letter_map)
                 if not np.isnan(scores).any():
-                    pred_end_relative_position = centre_of_mass(scores, word_distances)
-                    pred_end_letter_relative_position = centre_of_mass(scores, letter_distances)
+                    if level_type == 'letter':
+                        pred_end_relative_position = centre_of_mass(scores, letter_distances)
+                    else:
+                        pred_end_relative_position = centre_of_mass(scores, word_distances)
 
             saliency_variables['pred_end_relative_position'].append(pred_end_relative_position)
-            saliency_variables['pred_end_letter_relative_position'].append(pred_end_letter_relative_position)
+
+    if normalize_predictions:
+        max_pos = max([pos for pos in saliency_variables['end_relative_position'] if not math.isnan(pos)])
+        saliency_variables['end_relative_position'] = [pos / max_pos for pos in saliency_variables['end_relative_position']]
+        saliency_variables['pred_end_relative_position'] = [pos / max_pos for pos in saliency_variables['pred_end_relative_position']]
 
     saliency_df = pd.DataFrame.from_dict(saliency_variables)
     saliency_df.to_csv(filepath, index=False)
 
 def main():
 
+    print('Preparing to compute saliency...')
+
     model_name = 'gpt2'
     layers = '11'
     corpus_name = 'meco'
     eye_data_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_[{layers}]_{corpus_name}_window_df.csv'
     words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'
-    data_split = ['validation'] # test
+    saliency_types = ['next_word', '7letter_2right', 'combi_mass_len_sur_en_ss']
+    level_type = 'letter'
+    weights = []
 
     eye_data = pd.read_csv(eye_data_filepath, index_col=0)
     words_data = pd.read_csv(words_filepath, index_col=0)
 
-    val_eye_data, val_word_data, test_eye_data, test_word_data = split_data(eye_data, words_data)
-    datasets = {'validation': [val_eye_data, val_word_data], 'test': [test_eye_data, test_word_data]}
+    print('Computing letter distances...')
+    letter_map = compute_letter_map(words_data)
 
-    for split in data_split:
-        if split in datasets.keys():
-            output_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{model_name}_[{layers}]_{corpus_name}_{split}.csv'
-            compute_saliency(datasets[split][0], datasets[split][1], output_filepath)
-            # saliency_df = pd.read_csv(output_filepath, index_col=0)
+    print('Normalizing features...')
+    for feature in ['length', 'entropy', 'surprisal']:
+        norm_feature = normalize(eye_data[feature].tolist())
+        eye_data[f'norm_{feature}'] = norm_feature
+    # convert entropy values from previous context to 0.0001
+    eye_data['norm_entropy'] = eye_data.apply(lambda x: 0.0001 if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis=1)
+
+    print('Compute saliency values...')
+    output_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{saliency_types}_{level_type}_{model_name}_[{layers}]_{corpus_name}.csv'
+    compute_saliency(eye_data, output_filepath, saliency_types, letter_map, level_type, weights, normalize_predictions=True)
 
 if __name__ == '__main__':
     main()
