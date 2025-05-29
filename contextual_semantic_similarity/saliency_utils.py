@@ -2,6 +2,78 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 import math
+import json
+from contextual_semantic_similarity.process_corpus import check_alignment
+
+def fix_misalignment_letter_map(row, letter_ids):
+
+    if row.trialid == 0 and row.ianum > 20:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 40:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 62:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 79:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 96:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 114:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 132:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 149:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 163:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 0 and row.ianum > 180:
+        letter_ids = [p - 1 for p in letter_ids]
+
+    if row.trialid == 1 and row.ianum > 5:
+        letter_ids = [p + 1 for p in letter_ids]
+    if row.trialid == 1 and row.ianum == 7:
+        letter_ids = [p if p < 47 else 48 for p in letter_ids]
+
+    if row.trialid == 2 and row.ianum > 9:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 2 and row.ianum > 16:
+        letter_ids = [p - 1 for p in letter_ids]
+
+    if row.trialid == 3 and row.ianum > 17:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 33:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 36:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 53:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 75:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 91:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 108:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 124:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 3 and row.ianum > 141:
+        letter_ids = [p - 1 for p in letter_ids]
+
+    if row.trialid == 4 and row.ianum > 18:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 4 and row.ianum > 36:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 4 and row.ianum > 51:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 4 and row.ianum > 67:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 4 and row.ianum > 83:
+        letter_ids = [p - 1 for p in letter_ids]
+    if row.trialid == 4 and row.ianum > 85:
+        letter_ids = [p - 1 for p in letter_ids]
+    # if row.trialid == 4 and row.ianum > 94:
+    #     letter_ids = [p - 1 for p in letter_ids]
+
+
+    return letter_ids
 
 def compute_letter_map(words_df):
 
@@ -13,10 +85,56 @@ def compute_letter_map(words_df):
         for row in text.itertuples():
             all_letter_ids = [i + 1 for i, character in enumerate(row.texts)]
             letter_ids = all_letter_ids[position_in_text:position_in_text + row.length]
+            # letter_ids = fix_misalignment_letter_map(row, letter_ids)
             position_in_text += row.length + 1
             letter_map[f'{int(row.trialid)}-{int(row.ianum)}'] = letter_ids
 
     return letter_map
+
+def check_alignment_letter_map(letter_map, fixation_df):
+
+    for i, rows in fixation_df.groupby('trialid'):
+        rows = rows.sort_values(by='ianum')
+        for row in rows.itertuples():
+                match = False
+                fixated_letter = row.letter
+                if (fixated_letter not in ["", " ", '"'] and
+                        (row.trialid != 1 and row.ianum != 7) and
+                        (row.trialid != 2 and row.ianum != 33) and
+                        (row.trialid != 3 and row.ianum != 157)):
+                    fixated_word = row.ia
+                    if row.ianum > 0:
+                        fixated_word = ' ' + fixated_word
+                    if row.ianum < max(rows['ianum'].tolist()):
+                        fixated_word = fixated_word + ' '
+                    fixated_letter_occs = [p + 1 for p, l in enumerate(fixated_word) if l == fixated_letter]
+                    ia_letter_ids = []
+                    for index in fixated_letter_occs:
+                        spaces = [l for l in fixated_word if l == ' ']
+                        ia_letter_ids = [row.letternum + (lp - index) for lp in range(len(spaces), len(fixated_word))]
+                        if letter_map[f"{row.trialid}-{row.ianum}"] == ia_letter_ids:
+                            match = True
+                            break
+                    if not match:
+                        raise Exception(f'Letter map {letter_map[f"{row.trialid}-{row.ianum}"]} '
+                                        f'for {row.ia} (id {row.ianum}) in trial {row.trialid} from participant '
+                                        f'{row.participant_id} does not match '
+                                        f'letter number {row.letternum} for the same word in fixation report {ia_letter_ids}.')
+
+def align_letter_indices(eye_df, letter_map):
+
+    eye_df.sort_values(by=['trialid', 'ianum'], inplace=True)
+    letternum = []
+    for row in eye_df.itertuples():
+        letter_indices = letter_map[f'{row.trialid}-{row.ianum}']
+        if row.letter not in [" ", '"']:
+            fixated_letter_idx_at_word = row.ia.index(row.letter) # first occurrence (simplification)
+            fixated_letter_idx = letter_indices[fixated_letter_idx_at_word]
+            letternum.append(fixated_letter_idx)
+        else:
+            letternum.append(float('nan'))
+    eye_df['letternum'] = letternum
+    eye_df.sort_values(by=['participant_id', 'trialid', 'fixid'], inplace=True)
 
 def find_letter_distance_to_fixation(context, letter_map):
 
@@ -29,7 +147,7 @@ def find_letter_distance_to_fixation(context, letter_map):
                     math.ceil(len(all_let_pos_context_word) / 2) - 1]
     return centre_let_pos_context_word
 
-def find_letter_distance_2centre_of_context_word(context_word, letter_map, shifted_centre = None):
+def find_letter_distance_2centre_of_context_word(context_word, letter_map, shifted_centre=None):
 
     # compute distance in letters from fixated letter to the centre of context word
     all_let_pos_context_word = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
@@ -45,12 +163,15 @@ def find_letter_distance_2centre_of_context_word(context_word, letter_map, shift
 
     return letter_distance
 
-def find_letter_distances(context, letter_map):
+def find_letter_distances(context, letter_map, shift_centre=True):
 
     letter_distances = []
-    # because we consider the centre of n+1 as reference point (instead of letter being fixated at n)
-    # this is done to ensure the centre of fixations becomes n+1 instead of n
-    centre_let_pos_context_word = find_letter_distance_to_fixation(context, letter_map)
+    centre_let_pos_context_word = None
+
+    if shift_centre:
+        # because we consider the centre of n+1 as reference point (instead of letter being fixated at n)
+        # this is done to ensure the centre of fixations becomes n+1 instead of n
+        centre_let_pos_context_word = find_letter_distance_to_fixation(context, letter_map)
 
     for context_word in context.itertuples():
         letter_distance = find_letter_distance_2centre_of_context_word(context_word, letter_map,
@@ -63,9 +184,8 @@ def baseline_7letter_2right(context, letter_map, level_type):
 
     # word predicted is 7 letters to the right of the fixated letter,
     # and logically the letter predicted is 7 letters to the right of fixated letter
-
     # which word is 7 letters to the right of fixated letter
-    pos_letter7_2right = None
+    pos_letter7_2right = float('nan') # None
     if level_type == 'letter':
         pos_letter7_2right = 7.0
     else:
@@ -75,13 +195,13 @@ def baseline_7letter_2right(context, letter_map, level_type):
         fix_letter = context['letternum'].tolist()[0]
         # find position of letter 7 letter positions to the right of the letter being fixated
         letter7_2right = fix_letter + distance_letter7_2right
-
         for context_word in context.itertuples():
             # find letter positions of context word
             let_positions = letter_map[f'{context_word.trialid}-{context_word.context_ianum}']
             # check if the letter position 7 letters to the right is in this context word
             if letter7_2right in let_positions:
                 pos_letter7_2right = context_word.distance
+                assert pos_letter7_2right > -1, print('Word 7 letters to the right is to the left of the fixated word. This is not possible.')
 
     return pos_letter7_2right
 
@@ -129,20 +249,23 @@ def centre_of_mass(saliencies, positions):
 
     return (1/np.sum(saliencies))*np.sum([saliency*position for saliency,position in zip(saliencies,positions)])
 
-def normalize(all_values):
+def normalize(all_values, method='max-min'):
 
-    norm_feature = []
+    if method == 'z-score':
+        norm_feature = (all_values - np.mean(all_values)) / np.std(all_values)
 
-    min_feature = min([x for x in all_values if not math.isnan(x)])
-    max_feature = max([x for x in all_values if not math.isnan(x)])
+    else:
+        norm_feature = []
+        min_feature = min([x for x in all_values if not math.isnan(x)])
+        max_feature = max([x for x in all_values if not math.isnan(x)])
 
-    for x in all_values:
-        norm = None
-        if x:
-            norm = (x - min_feature) / (max_feature - min_feature)
-            if norm == 0.0:
-                norm = .0001 # to avoid 0 for minimum
-        norm_feature.append(norm)
+        for x in all_values:
+            norm = None
+            if x:
+                norm = (x - min_feature) / (max_feature - min_feature)
+                if norm == 0.0:
+                    norm = 1e-06 # to avoid 0 for minimum
+            norm_feature.append(norm)
 
     return norm_feature
 
@@ -335,36 +458,47 @@ def compute_saliency(df, filepath, saliency_types, letter_map, level_type='word'
 
     saliency_df = pd.DataFrame.from_dict(saliency_variables)
     saliency_df.to_csv(filepath, index=False)
+#
+# def main():
+#
+#     print('Preparing to compute saliency...')
+#
+#     model_name = 'gpt2'
+#     layers = '11'
+#     corpus_name = 'meco'
+#     eye_data_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_[{layers}]_{corpus_name}_window_df.csv'
+#     words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'
+#     saliency_types = ['next_word', '7letter_2right', 'combi_mass_len_sur_en_ss']
+#     level_type = 'letter'
+#     weights = []
+#
+#     eye_data = pd.read_csv(eye_data_filepath, index_col=0)
+#     words_data = pd.read_csv(words_filepath, index_col=0)
+#
+#     print('Computing letter distances...')
+#     letter_map = compute_letter_map(words_data)
+#
+#     print('Normalizing features...')
+#     for feature in ['length', 'entropy', 'surprisal']:
+#         norm_feature = normalize(eye_data[feature].tolist())
+#         eye_data[f'norm_{feature}'] = norm_feature
+#     # convert entropy values from previous context to 0.0001
+#     eye_data['norm_entropy'] = eye_data.apply(lambda x: 0.0001 if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis=1)
+#
+#     print('Compute saliency values...')
+#     output_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{saliency_types}_{level_type}_{model_name}_[{layers}]_{corpus_name}.csv'
+#     compute_saliency(eye_data, output_filepath, saliency_types, letter_map, level_type, weights, normalize_predictions=True)
+#
+# if __name__ == '__main__':
+#     main()
 
-def main():
-
-    print('Preparing to compute saliency...')
-
-    model_name = 'gpt2'
-    layers = '11'
-    corpus_name = 'meco'
-    eye_data_filepath = f'data/processed/{corpus_name}/{model_name}/full_{model_name}_[{layers}]_{corpus_name}_window_df.csv'
-    words_filepath = f'data/processed/{corpus_name}/words_en_df.csv'
-    saliency_types = ['next_word', '7letter_2right', 'combi_mass_len_sur_en_ss']
-    level_type = 'letter'
-    weights = []
-
-    eye_data = pd.read_csv(eye_data_filepath, index_col=0)
-    words_data = pd.read_csv(words_filepath, index_col=0)
-
-    print('Computing letter distances...')
-    letter_map = compute_letter_map(words_data)
-
-    print('Normalizing features...')
-    for feature in ['length', 'entropy', 'surprisal']:
-        norm_feature = normalize(eye_data[feature].tolist())
-        eye_data[f'norm_{feature}'] = norm_feature
-    # convert entropy values from previous context to 0.0001
-    eye_data['norm_entropy'] = eye_data.apply(lambda x: 0.0001 if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis=1)
-
-    print('Compute saliency values...')
-    output_filepath = f'data/processed/{corpus_name}/{model_name}/saliency_{saliency_types}_{level_type}_{model_name}_[{layers}]_{corpus_name}.csv'
-    compute_saliency(eye_data, output_filepath, saliency_types, letter_map, level_type, weights, normalize_predictions=True)
-
-if __name__ == '__main__':
-    main()
+# eye_data_filepath = f'data/processed/meco/gpt2/full_gpt2_[11]_meco_window_cleaned.csv'
+# eye_data_filepath = f'data/processed/meco/fixation_report_en_df.csv'
+# words_filepath = f'data/processed/meco/words_en_df.csv'
+# eye_data = pd.read_csv(eye_data_filepath)
+# words_data = pd.read_csv(words_filepath)
+# letter_map = compute_letter_map(words_data)
+# with open('letter_map.json', 'w') as fp:
+#     json.dump(letter_map, fp, indent=4)
+# check_alignment_letter_map(letter_map,eye_data)
+# align_letter_indices(eye_data, letter_map)

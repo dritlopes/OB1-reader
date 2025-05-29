@@ -7,6 +7,14 @@ from sklearn.metrics import mean_squared_error
 from collections import defaultdict
 from tensorflow.python.ops.resource_variable_ops import variable_accessed
 
+def check_distribution_col(data, columns):
+
+    for col in columns:
+        print(col)
+        print(np.max(data[col]), np.min(data[col]), np.std(data[col]))
+        sns.displot(data=data, x=col, stat='probability')
+        plt.show()
+        plt.clf()
 
 def check_saccade_length_distribution(eye_move_df, eye_move_filepath):
     # Graph with distribution of saccade distances in fixation report

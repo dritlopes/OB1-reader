@@ -13,4 +13,4 @@
 module load shared 2024
 module load 2024 PyTorch-bundle/2.1.2-foss-2023a-CUDA-12.1.1
 
-python $HOME/contextual_semantic_similarity/optimize_saliency.py
+python $HOME/SaliencyMap/optimize_saliency.py

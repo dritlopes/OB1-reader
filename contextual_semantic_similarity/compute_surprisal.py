@@ -120,7 +120,7 @@ def main():
 
     # if surprisal dataframe already exists, simply read it in
     if os.path.exists(surprisal_filepath):
-        surprisal_df = pd.read_csv(surprisal_filepath)
+        surprisal_df = pd.read_csv(surprisal_filepath, sep='\t')
 
     # otherwise, compute surprisal values
     else:
