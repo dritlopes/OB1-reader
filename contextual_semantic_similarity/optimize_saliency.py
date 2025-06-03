@@ -6,6 +6,9 @@ import pandas as pd
 import time
 import torch
 import random
+from collections import defaultdict
+from itertools import combinations
+from scipy.stats import ttest_rel
 
 from contextual_semantic_similarity.visualizations import display_prediction_distribution
 from prepare_data import (convert_data_to_tensors, split_data, compute_split_arrays,
@@ -177,6 +180,17 @@ def save_baseline_results(split, error, error_change, filepath):
             f.write('split\terror\tbaseline-model\n')
         f.write(f'{split}\t{error}\t{error_change}\n')
 
+def test_sig_diff(all_errors, all_conditions, opt_dir, loss_function='mse'):
+
+    df = pd.DataFrame({'error': all_errors, 'condition': all_conditions})
+    error_dict = defaultdict(list)
+    for condition, errors in df.groupby('condition'):
+        error_dict[condition] = errors['error'].tolist()
+    for condition_combi in combinations(df['condition'].unique().tolist(), 2):
+        result = ttest_rel(error_dict[condition_combi[0]], error_dict[condition_combi[1]])
+        with open(f'{opt_dir}/t-test_{condition_combi}_{loss_function}.csv', 'w') as f:
+            f.write('t-statistic\tp-value\tdf\n')
+            f.write(f'{result.statistic}\t{result.pvalue}\t{result.df}\n')
 
 def main():
 
@@ -191,7 +205,7 @@ def main():
     pre_process = False
     opt_dir = f'data/processed/{corpus_name}/{model_name}/optimization'
     loss_function = 'mae'
-    n_features = 4
+    n_features = 4 # similarity, length, entropy, surprisal
 
     eye_data = pd.read_csv(eye_data_filepath)
     words_data = pd.read_csv(words_filepath)
@@ -282,7 +296,9 @@ def main():
             all_targets.extend(clean_test_true_targets)
             all_models.extend([baseline for i in clean_base_pred_targets])
 
+
     display_error(all_errors, all_conditions, loss_function, f'{opt_dir}/error_{mappings}_{level}.tiff')
+    test_sig_diff(all_errors, all_conditions, opt_dir, loss_function)
     display_prediction_distribution(all_targets, all_predictions, f'{opt_dir}/distribution_opt_{mappings}_{level}.tiff', col=all_models)
 
     # ---------------------------------------------------

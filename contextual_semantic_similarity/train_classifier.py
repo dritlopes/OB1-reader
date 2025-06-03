@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import torch
 from torch import nn
 from torch.nn.functional import cross_entropy
@@ -8,8 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+from collections import defaultdict
+from itertools import combinations
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.utils.class_weight import compute_class_weight
+from scipy.stats import ttest_rel
 from prepare_data import convert_data_to_tensors, split_data, FixationDataset, load_baseline_tensors, clean_tensors
 from visualizations import display_eval, display_prediction_distribution
 
@@ -196,6 +201,44 @@ def evaluate_model(y_true:np.array, y_pred:np.array):
 
     return report, cfm
 
+def read_in_scores(splits, opt_dir, measures='f1-score,accuracy', models='model,next_word,7letter_2right,random', feature_combi=''):
+
+    all_values, all_models, all_measures = [], [], []
+
+    for model in models.split(','):
+        for i in splits:
+            if model == 'model' and not feature_combi:  # model with all features
+                filepath = f'{opt_dir}/report_split{i}.csv'
+            elif not feature_combi:  # baselines
+                filepath = f'{opt_dir}/report_split{i}_baseline_{model}.csv'
+            else:  # if feature combi for feature ablation
+                filepath = f'{opt_dir}/report_split{i}_{feature_combi}.csv'
+            df = pd.read_csv(filepath)
+            for measure in measures.split(','):
+                if measure == 'accuracy':
+                    value = df['accuracy'].tolist()[0]
+                else:
+                    value = df[df['Unnamed: 0'] == measure]['macro avg'].tolist()[0]
+                all_values.append(value)
+                all_models.append(model)
+                all_measures.append(measure)
+
+    return all_values, all_models, all_measures
+
+def test_sig_diff(all_values, all_models, all_measures, opt_dir):
+
+    df = pd.DataFrame({'score': all_values, 'model': all_models, 'measure': all_measures})
+
+    # for each measure, e.g. acc and f1-score, take scores of each model, combine them in pairs, and perform t-test
+    for measure, rows in df.groupby('measure'):
+        score_dict = defaultdict(list)
+        for model, scores in rows.groupby('model'):
+            score_dict[model] = scores['score'].tolist()
+        for model_combi in combinations(rows['model'].unique().tolist(), 2):
+            result = ttest_rel(score_dict[model_combi[0]], score_dict[model_combi[1]])
+            with open(f'{opt_dir}/t-test_{measure}_{model_combi}.csv', 'w') as f:
+                f.write('t-statistic\tp-value\tdf\n')
+                f.write(f'{result.statistic}\t{result.pvalue}\t{result.df}\n')
 
 def main():
     # TODO train per participant
@@ -250,105 +293,107 @@ def main():
     # start training
     print('Starting training...')
 
-    # all_targets, all_predictions, all_models = [], [], []
-    # for i, split in enumerate(split_indices):
-    #
-    #     print(f'Split: {i}')
+    all_targets, all_predictions, all_models = [], [], []
+    for i, split in enumerate(split_indices):
 
-        # training_set = FixationDataset(split['train_index'], opt_dir, features=features)
-        # training_generator = DataLoader(training_set, **params_dataloader)
-        # val_set = FixationDataset(split['test_index'], opt_dir, features=features)
-        # val_generator = DataLoader(val_set, **params_dataloader)
-        #
-        # # loss_weights = compute_class_weight("balanced",
-        # #                                     classes=np.unique(training_set.y_tensor),
-        # #                                     y=np.array(training_set.y_tensor))
-        # # loss_weights = torch.FloatTensor(loss_weights).to(device)
-        #
-        # model = Classifier(**params_classifier).to(device)
-        # train_model(model=model,
-        #       training_dataset=training_generator,
-        #       val_dataset=val_generator,
-        #       epochs=epochs,
-        #       device=device,
-        #       display=True,
-        #       display_dir=opt_dir,
-        #       n_split=i,
-        #       loss_weights=None)
-        # torch.save(model, f'{opt_dir}/classifier_split{i}.pth')
-        # # model = torch.load(f'{opt_dir}/classifier_split{i}_loss_weights.pth', map_location=device)
-        #
-        # # Evaluate model with validation set
-        # print('Testing training model...')
-        # y_pred, y_true = test_model(model=model, test_dataset=val_generator, device=device)
-        # # convert labels back to -3 to +3
-        # y_true = y_true - 3
-        # y_pred = y_pred - 3
-        # report, cf_matrix = evaluate_model(y_true, y_pred)
-        # report.to_csv(f'{opt_dir}/report_split{i}.csv')
-        # cf_matrix.to_csv(f'{opt_dir}/confusion_matrix_split{i}.csv')
-        # all_targets.append(y_true)
-        # all_predictions.append(y_pred)
-        # all_models.extend(['model' for i in range(y_true.shape[0])])
+        print(f'Split: {i}')
 
-    #     # evaluate baselines
-    #     print('Computing and evaluating baselines...')
-    #     for baseline in baselines.split(','): # '7letter_2right'
-    #         if baseline in ['next_word', '7letter_2right']:
-    #             y_pred = load_baseline_tensors(split['test_index'], baseline, opt_dir)
-    #             y_true = val_set.y_tensor
-    #             y_true, y_pred = clean_tensors(y_true, y_pred)
-    #             y_true = y_true - torch.tensor(3)
-    #             y_pred = y_pred.detach().cpu().numpy()
-    #             y_true = y_true.detach().cpu().numpy()
-    #         else:
-    #             print('Training random model...')
-    #             model = Classifier(**params_classifier).to(device)
-    #             training_set = FixationDataset(split['train_index'], opt_dir, features=features, random=True)
-    #             training_generator = DataLoader(training_set, **params_dataloader)
-    #             val_set = FixationDataset(split['test_index'], opt_dir, features=features, random=True)
-    #             val_generator = DataLoader(val_set, **params_dataloader)
-    #             train_model(model=model,
-    #                         training_dataset=training_generator,
-    #                         val_dataset=val_generator,
-    #                         epochs=epochs,
-    #                         device=device,
-    #                         n_split=i,
-    #                         loss_weights=None)
-    #             torch.save(model, f'{opt_dir}/classifier_split{i}_random.pth')
-    #             # model = torch.load(f'{opt_dir}/classifier_split{i}_random.pth', map_location=device)
-    #             y_pred, y_true = test_model(model=model, test_dataset=val_generator, device=device)
-    #             # convert labels back to -3 to +3
-    #             y_true = y_true - 3
-    #             y_pred = y_pred - 3
-    #         report, cf_matrix = evaluate_model(y_true, y_pred)
-    #         report.to_csv(f'{opt_dir}/report_split{i}_baseline_{baseline}.csv')
-    #         cf_matrix.to_csv(f'{opt_dir}/confusion_matrix_split{i}_baseline_{baseline}.csv')
-    #         all_targets.append(y_true)
-    #         all_predictions.append(y_pred)
-    #         all_models.extend([baseline for i in range(y_true.shape[0])])
-    #
-    # all_targets=np.concatenate(all_targets, axis=0)
-    # all_predictions=np.concatenate(all_predictions, axis=0)
-    # print('Creating graphs of validation results...')
-    # display_prediction_distribution(all_targets, all_predictions, filepath=f'{opt_dir}/distribution_nn_all_val_splits.tiff', col=all_models)
-    # display_eval(splits=[0,1,2,3,4], opt_dir=opt_dir, measures='f1-score,accuracy', models='model,' + baselines)
+        training_set = FixationDataset(split['train_index'], opt_dir, features=features)
+        training_generator = DataLoader(training_set, **params_dataloader)
+        val_set = FixationDataset(split['test_index'], opt_dir, features=features)
+        val_generator = DataLoader(val_set, **params_dataloader)
+
+        # loss_weights = compute_class_weight("balanced",
+        #                                     classes=np.unique(training_set.y_tensor),
+        #                                     y=np.array(training_set.y_tensor))
+        # loss_weights = torch.FloatTensor(loss_weights).to(device)
+
+        model = Classifier(**params_classifier).to(device)
+        train_model(model=model,
+              training_dataset=training_generator,
+              val_dataset=val_generator,
+              epochs=epochs,
+              device=device,
+              display=True,
+              display_dir=opt_dir,
+              n_split=i,
+              loss_weights=None)
+        torch.save(model, f'{opt_dir}/classifier_split{i}.pth')
+        # model = torch.load(f'{opt_dir}/classifier_split{i}_loss_weights.pth', map_location=device)
+
+        # Evaluate model with validation set
+        print('Testing training model...')
+        y_pred, y_true = test_model(model=model, test_dataset=val_generator, device=device)
+        # convert labels back to -3 to +3
+        y_true = y_true - 3
+        y_pred = y_pred - 3
+        report, cf_matrix = evaluate_model(y_true, y_pred)
+        report.to_csv(f'{opt_dir}/report_split{i}.csv')
+        cf_matrix.to_csv(f'{opt_dir}/confusion_matrix_split{i}.csv')
+        all_targets.append(y_true)
+        all_predictions.append(y_pred)
+        all_models.extend(['model' for i in range(y_true.shape[0])])
+
+        # evaluate baselines
+        print('Computing and evaluating baselines...')
+        for baseline in baselines.split(','): # '7letter_2right'
+            if baseline in ['next_word', '7letter_2right']:
+                y_pred = load_baseline_tensors(split['test_index'], baseline, opt_dir)
+                y_true = val_set.y_tensor
+                y_true, y_pred = clean_tensors(y_true, y_pred)
+                y_true = y_true - torch.tensor(3)
+                y_pred = y_pred.detach().cpu().numpy()
+                y_true = y_true.detach().cpu().numpy()
+            else:
+                print('Training random model...')
+                model = Classifier(**params_classifier).to(device)
+                training_set = FixationDataset(split['train_index'], opt_dir, features=features, random=True)
+                training_generator = DataLoader(training_set, **params_dataloader)
+                val_set = FixationDataset(split['test_index'], opt_dir, features=features, random=True)
+                val_generator = DataLoader(val_set, **params_dataloader)
+                train_model(model=model,
+                            training_dataset=training_generator,
+                            val_dataset=val_generator,
+                            epochs=epochs,
+                            device=device,
+                            n_split=i,
+                            loss_weights=None)
+                torch.save(model, f'{opt_dir}/classifier_split{i}_random.pth')
+                # model = torch.load(f'{opt_dir}/classifier_split{i}_random.pth', map_location=device)
+                y_pred, y_true = test_model(model=model, test_dataset=val_generator, device=device)
+                # convert labels back to -3 to +3
+                y_true = y_true - 3
+                y_pred = y_pred - 3
+            report, cf_matrix = evaluate_model(y_true, y_pred)
+            report.to_csv(f'{opt_dir}/report_split{i}_baseline_{baseline}.csv')
+            cf_matrix.to_csv(f'{opt_dir}/confusion_matrix_split{i}_baseline_{baseline}.csv')
+            all_targets.append(y_true)
+            all_predictions.append(y_pred)
+            all_models.extend([baseline for i in range(y_true.shape[0])])
+
+    all_targets=np.concatenate(all_targets, axis=0)
+    all_predictions=np.concatenate(all_predictions, axis=0)
+    print('Creating graphs of validation results...')
+    display_prediction_distribution(all_targets, all_predictions, filepath=f'{opt_dir}/distribution_nn_all_val_splits.tiff', col=all_models)
+    all_values, all_models, all_measures = read_in_scores(splits=[0,1,2,3,4], opt_dir=opt_dir, measures='f1-score,accuracy', models='model,' + baselines)
+    display_eval(all_values, all_models, all_measures, filepath=f'{opt_dir}/eval.tiff')
+    test_sig_diff(all_values, all_models, all_measures, opt_dir)
 
     # Feature ablation
-    for feature_combi in ['length,entropy,surprisal',
-                          'similarity,entropy,surprisal',
-                          'length,similarity,surprisal',
-                          'length,similarity,entropy',
-                          'similarity',
+    all_targets, all_predictions, all_models = [], [], []
+
+    for feature_combi in ['similarity',
                           'length',
                           'entropy',
                           'surprisal']:
+                          #'length,entropy,surprisal',
+                          # 'similarity,entropy,surprisal',
+                          # 'length,similarity,surprisal',
+                          # 'length,similarity,entropy',
 
         n_features = len(feature_combi.split(','))
         params_classifier['input_nodes'] = n_features * n_context_words
         params_classifier['hidden_nodes'] = n_features * n_context_words
-
-        all_targets, all_predictions = [],[]
 
         for i, split in enumerate(split_indices):
 
@@ -382,11 +427,13 @@ def main():
             cf_matrix.to_csv(f'{opt_dir}/confusion_matrix_split{i}_{feature_combi}.csv')
             all_targets.append(y_true)
             all_predictions.append(y_pred)
+            all_models.extend([feature_combi for i in range(y_true.shape[0])])
+        all_values, all_models, all_measures = read_in_scores(splits=[0,1,2,3,4], opt_dir=opt_dir, measures='f1-score,accuracy', models='model,' + baselines, feature_combi=feature_combi)
+        display_eval(all_values, all_models, all_measures, filepath=f'{opt_dir}/eval_{feature_combi}.tiff')
+    all_targets=np.concatenate(all_targets, axis=0)
+    all_predictions=np.concatenate(all_predictions, axis=0)
+    display_prediction_distribution(all_targets, all_predictions, filepath=f'{opt_dir}/distribution_nn_feature_ablation_all_val_splits.tiff', col=all_models)
 
-        all_targets=np.concatenate(all_targets, axis=0)
-        all_predictions=np.concatenate(all_predictions, axis=0)
-        display_prediction_distribution(all_targets, all_predictions, filepath=f'{opt_dir}/distribution_nn_{feature_combi}_all_val_splits.tiff')
-        display_eval(splits=[0, 1, 2, 3, 4], opt_dir=opt_dir, measures='f1-score,accuracy', models='model,' + baselines, feature_combi=feature_combi)
 
 if __name__ == '__main__':
     main()
