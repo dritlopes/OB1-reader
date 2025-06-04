@@ -4,7 +4,6 @@ from evaluation import evaluate, extract_sentences
 
 # text ids from eye-tracking corpus
 text_ids = [1,2,3]
-
 # "meco" or "provo"
 dataset_name = "provo"
 
@@ -12,7 +11,7 @@ dataset_name = "provo"
 texts = extract_sentences(dataset_name, text_ids = text_ids)
 
 # initialize model with default config
-model = ReadingModel(texts)
+model = ReadingModel(texts, ngram_gap=0)
 
 # run reading simulation
 output:list[list[list[FixationOutput]]] = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv', number_of_simulations=2, verbose=False)

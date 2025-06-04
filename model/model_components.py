@@ -4,7 +4,8 @@ import torch
 from torch import nn
 import math
 import warnings
-from reading_helper_functions import string_to_open_ngrams, cal_ngram_exc_input, is_similar_word_length, \
+import pandas as pd
+from reading_helper_functions import string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
     get_midword_position_for_surrounding_word, calc_word_attention_right, calc_saccade_error, define_slot_matching_order, \
     find_word_edges, sample_from_norm_distribution
 
@@ -66,6 +67,67 @@ def compute_eye_position(stimulus:str, fixated_position_stimulus:int, eye_positi
 
     return int(np.round(eye_position))
 
+# def compute_ngram_activity(stimulus:str,
+#                            eye_position:int,
+#                            attention_position:int,
+#                            attend_width:float,
+#                            let_per_deg:float,
+#                            attention_skew:float,
+#                            gap:int,
+#                            recognition_in_stimulus:list[int],
+#                            tokens:list,
+#                            recognized_word_at_cycle:np.ndarray[int],
+#                            n_cycles:int)->dict:
+#
+#     """
+#     Initialize word activity based on ngram excitatory input.
+#
+#     :param stimulus: the tokens the model is processing in parallel.
+#     :param eye_position: the index of the character the eyes are fixating at in the stimulus.
+#     :param attention_position: the index of the character where the focus of attention is located in the stimulus.
+#     :param attend_width: how long the attention window should be when processing the input stimulus.
+#     :param let_per_deg: used to calculate visual acuity, which is then used to compute attention.
+#     :param attention_skew: used in the formula to compute attention. How skewed attention should be to the right of the fixation point. 1 equals symmetrical distribution.
+#     :param gap: the number of characters between two characters allowed to still form a bi-gram.
+#     :param recognition_in_stimulus: list of word indices that have been recognized in stimulus.
+#     :param tokens: the input text tokens.
+#     :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
+#     :param n_cycles: how many processing cycles have already occurred in current fixation.
+#
+#     :return: dict with ngram as keys and excitatory input as value.
+#     """
+#
+#     unit_activations = {}
+#     # define the word ngrams, its weights and their location within the word
+#     all_ngrams, all_weights, all_locations = string_to_ngrams(stimulus, gap)
+#     fix_ngrams = []
+#
+#     if len(recognition_in_stimulus) > 0 and len(tokens) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
+#         for i in recognition_in_stimulus:
+#             # AL: a hack to avoid recognized words to be too active and be matched to subsequent positions too!
+#             # after recognition, 200ms block on activation (= 8 act cycles)
+#             if n_cycles - recognized_word_at_cycle[i] <= 8:
+#                 ngrams, weights, locations = string_to_ngrams(tokens[i], gap)
+#                 fix_ngrams.extend(ngrams)
+#                 # print(tokens[i], n_cycles, recognition_cycle[i], ngrams)
+#
+#     for ngram, weight, location in zip(all_ngrams, all_weights, all_locations):
+#         # remove activation of ngrams from recognized words for the next 8 act cycles after recognition
+#         if ngram in fix_ngrams:
+#             activation = 0.0
+#         else:
+#             activation = cal_ngram_exc_input(location, weight, eye_position, attention_position,
+#                                              attend_width, let_per_deg, attention_skew)
+#         # AL: a ngram that appears more than once in the simulus
+#         # will have the activation from the ngram in the position with highest activation
+#         if ngram in unit_activations.keys():
+#             unit_activations[ngram] = max(unit_activations[ngram], activation)
+#         else:
+#             unit_activations[ngram] = activation
+#     # print(unit_activations)
+#
+#     return unit_activations
+
 def compute_ngram_activity(stimulus:str,
                            eye_position:int,
                            attention_position:int,
@@ -76,7 +138,8 @@ def compute_ngram_activity(stimulus:str,
                            recognition_in_stimulus:list[int],
                            tokens:list,
                            recognized_word_at_cycle:np.ndarray[int],
-                           n_cycles:int)->dict:
+                           n_cycles:int,
+                           bigramFrame:pd.DataFrame=None)->dict:
 
     """
     Initialize word activity based on ngram excitatory input.
@@ -98,7 +161,9 @@ def compute_ngram_activity(stimulus:str,
 
     unit_activations = {}
     # define the word ngrams, its weights and their location within the word
-    all_ngrams, all_weights, all_locations = string_to_open_ngrams(stimulus, gap)
+    if gap==0 and bigramFrame is None:
+        raise NotImplementedError("Must specify bigramFrame when using closed ngrams!")
+    all_ngrams, all_weights, all_locations = string_to_ngrams(stimulus, bigramFrame, gap)
     fix_ngrams = []
 
     if len(recognition_in_stimulus) > 0 and len(tokens) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
@@ -106,7 +171,7 @@ def compute_ngram_activity(stimulus:str,
             # AL: a hack to avoid recognized words to be too active and be matched to subsequent positions too!
             # after recognition, 200ms block on activation (= 8 act cycles)
             if n_cycles - recognized_word_at_cycle[i] <= 8:
-                ngrams, weights, locations = string_to_open_ngrams(tokens[i], gap)
+                ngrams, weights, locations = string_to_ngrams(stimulus, bigramFrame, gap)
                 fix_ngrams.extend(ngrams)
                 # print(tokens[i], n_cycles, recognition_cycle[i], ngrams)
 
@@ -137,7 +202,8 @@ def compute_words_input(stimulus:str,
                         recognition_in_stimulus:list[int],
                         tokens:list[str],
                         recognized_word_at_cycle:np.ndarray[int],
-                        n_cycles:int)->(np.ndarray,list,int,int):
+                        n_cycles:int,
+                        bigramFrame:pd.DataFrame=None)->(np.ndarray,list,int,int):
 
     """
     Calculate activity for each word in the lexicon given the excitatory input from all ngrams in the stimulus.
@@ -167,7 +233,7 @@ def compute_words_input(stimulus:str,
     unit_activations = compute_ngram_activity(stimulus, eye_position,
                                               attention_position, attend_width, pm.let_per_deg,
                                               pm.attention_skew, pm.ngram_gap,
-                                              recognition_in_stimulus, tokens, recognized_word_at_cycle, n_cycles)
+                                              recognition_in_stimulus, tokens, recognized_word_at_cycle, n_cycles, bigramFrame)
     # print(f'Activated ngrams: {unit_activations}')
     total_ngram_activity = sum(unit_activations.values())
     n_ngrams = len(unit_activations.keys())
@@ -873,7 +939,8 @@ class FixationProcessor:
                                                                                      self.recognition_in_stimulus,
                                                                                      self.reader.tokens,
                                                                                      self.recognized_word_at_cycle,
-                                                                                     self.n_cycles)
+                                                                                     self.n_cycles,
+                                                                                     self.reader.model.bigramFrame)
 
         # Counter n_cycles_since_attent_shift is 0 until attention shift (saccade program initiation),
         # then starts counting to 5 (because a saccade program takes 5 cycles, or 125ms.)
@@ -896,7 +963,8 @@ class FixationProcessor:
                                                                                              self.recognition_in_stimulus,
                                                                                              self.reader.tokens,
                                                                                              self.recognized_word_at_cycle,
-                                                                                             self.n_cycles)
+                                                                                             self.n_cycles,
+                                                                                             self.reader.model.bigramFrame)
 
             # ---------------------- Update word activity per cycle ---------------------
             # Update word act with word inhibition (input remains same, so does not have to be updated)
@@ -987,7 +1055,8 @@ class FixationProcessor:
                                                                                                      self.recognition_in_stimulus,
                                                                                                      self.reader.tokens,
                                                                                                      self.recognized_word_at_cycle,
-                                                                                                     self.n_cycles)
+                                                                                                     self.n_cycles,
+                                                                                                     self.reader.model.bigramFrame)
                         self.attention_position = np.round(self.attention_position)
 
                         if verbose: print(

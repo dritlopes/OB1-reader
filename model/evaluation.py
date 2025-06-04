@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 from copy import deepcopy
-import os
 from fixations_to_words import fixation_to_word, WordLevelStatistics
 from model_components import FixationOutput
 from utils import pre_process_string
+import re
 
 def to_meco_dict(wls: WordLevelStatistics):
     return {
@@ -20,7 +20,7 @@ def to_meco_dict(wls: WordLevelStatistics):
 
 def to_provo_dict(wls: WordLevelStatistics):
     return {
-        "Word": wls.word,
+        "IA_LABEL": wls.word,
         "IA_SKIP": wls.skip_rate,
         "IA_REGRESSION_IN": wls.incoming_regression_rate,
         "IA_REGRESSION_OUT": wls.outgoing_regression_rate,
@@ -49,7 +49,7 @@ def eval_stats(x,y,label):
         "std_true": np.std(y)
     }
 
-def extract_sentences(dataset:str, data_dir: str=None, text_ids: list[int]=None):
+def extract_sentences(dataset:Literal['provo', 'meco'], data_dir: str=None, text_ids: list[int]=None):
     if dataset == 'provo':
         if data_dir is None:
             data_dir = "../data/raw/Provo_Corpus-Eyetracking_Data.csv"
@@ -84,7 +84,47 @@ def extract_sentences(dataset:str, data_dir: str=None, text_ids: list[int]=None)
 
     return texts
 
-def evaluate(output:list[list[list[FixationOutput]]], dataset: str = 'provo', data_dir: str|None=None, text_ids: list[int]=None, eval_output_path = "../data/eval_output/eval.csv", averaged_simulation_output_path="../data/eval_output/simulation.csv"):
+def cleaned(word: str):
+    return re.sub(r"[^a-zA-Z0-9]", "", word).lower()
+
+def aggregate_and_align(gt, sim, dataset, text_id, stat_labels, word_level_id_label, word_content_label):
+    # fix errors in the MECO data
+    if dataset == 'meco' and text_id == 3:
+        gt = gt[~((gt['ianum'] == 149) & (gt['uniform_id'].isin([f'en_{str(p)}' for p in
+                                                                 [101, 102, 103, 3, 6, 72, 74, 76, 78, 79, 82, 83, 84,
+                                                                  85, 86, 87, 88, 89, 90, 91, 93, 94, 95, 97, 98,
+                                                                  99]])))]
+        gt['ianum'] = gt.apply(
+            lambda x: x['ianum'] - 1 if (x['ianum'] >= 149) & (x['uniform_id'] in [f'en_{str(p)}' for p in
+                                                                                   [101, 102, 103, 3, 6, 72, 74, 76, 78,
+                                                                                    79, 82, 83, 84, 85, 86, 87, 88, 89,
+                                                                                    90, 91, 93, 94, 95, 97, 98, 99]])
+            else x['ianum'], axis=1)
+        to_fix = (gt['uniform_id'].iloc[0] in [f'en_{str(p)}' for p in
+                                               [101, 102, 103, 3, 6, 72, 74, 76, 78, 79, 82, 83, 84, 85, 86, 87, 88, 89,
+                                                90, 91, 93, 94, 95, 97, 98, 99]])
+
+    # align line number in the MECO simulation output
+    if dataset == 'meco' and text_id == 3 and to_fix:
+        sim = sim.drop(index=148, axis=0)
+
+    # check consistency of gt word content for aggregation
+    if not all(gt.groupby(word_level_id_label)[word_content_label].nunique() == 1):
+        raise ValueError(
+            f"Inconsistent values found in column '{word_content_label}' for the same '{word_level_id_label}'.")
+
+    # aggregate gt
+    agg_param = {k: "mean" for k in stat_labels}
+    agg_param[word_content_label] = "first"
+    gt = gt.groupby(word_level_id_label).agg(agg_param).reset_index()
+
+    # check if words in gt and sim are the same
+    assert [cleaned(w) for w in gt[word_content_label]] == [cleaned(w) for w in sim[
+        word_content_label]], f"Words do not match: {gt[word_content_label]} vs {sim[word_content_label]}"
+
+    return gt, sim
+
+def evaluate(output:list[list[list[FixationOutput]]], dataset: Literal['provo', 'meco'] = 'provo', data_dir: str|None=None, text_ids: list[int]=None, eval_output_path = "../data/eval_output/eval.csv", averaged_simulation_output_path="../data/eval_output/simulation.csv"):
     if dataset == 'provo':
         if data_dir is None:
             data_dir = "../data/raw/Provo_Corpus-Eyetracking_Data.csv"
@@ -123,21 +163,20 @@ def evaluate(output:list[list[list[FixationOutput]]], dataset: str = 'provo', da
     results = []
     for (text_id, wls) in zip(text_ids, wlss):
         gt = deepcopy(df[df[text_level_id_label]==text_id])
-        agg_param = {k:"mean" for k in stat_labels}
-        agg_param[word_content_label] = "first"
-        gt = gt.groupby(word_level_id_label).agg(agg_param).reset_index()
         sim = to_dataframe(wls, dataset)
+
+        gt, sim = aggregate_and_align(gt, sim, dataset, text_id, stat_labels, word_level_id_label,
+                                      word_content_label)
+
         sim[text_level_id_label] = text_id
         sim_results.append(sim)
-    
+
         for label in stat_labels:
             result = eval_stats(sim[label], gt[label], label)
             result[text_level_id_label] = text_id
             result["Label"] = label
             results.append(result)
-    os.makedirs(os.path.dirname(eval_output_path), exist_ok=True)
-    os.makedirs(os.path.dirname(averaged_simulation_output_path), exist_ok=True)
-    res_df = pd.DataFrame(results) #returns evaluation statistic results
+    res_df = pd.DataFrame(results)
     res_df.to_csv(eval_output_path)
-    sim_df = pd.concat(sim_results, axis=0, ignore_index=True) #returns simulation results
+    sim_df = pd.concat(sim_results, axis=0, ignore_index=True)
     sim_df.to_csv(averaged_simulation_output_path)

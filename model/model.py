@@ -5,9 +5,9 @@ import os
 import logging
 from datetime import datetime
 from model_components import sequence_read
-from reading_helper_functions import string_to_open_ngrams
+from reading_helper_functions import string_to_ngrams
 import task_attributes
-from utils import write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
+from utils import get_ngram_frequency_from_file, write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
 
 # will create a new file everytime, stamped with date and time
 now = datetime.now()
@@ -96,7 +96,7 @@ def add_lexicon(words:list,
 
     return lexicon
 
-def add_lexicon_ngram_mapping(lexicon:list, ngram_gap:int, verbose:bool) -> dict:
+def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:bool) -> dict:
 
     """
     Creates mapping between each word in the lexicon and its ngrams.
@@ -115,7 +115,7 @@ def add_lexicon_ngram_mapping(lexicon:list, ngram_gap:int, verbose:bool) -> dict
         for i, word in enumerate(lexicon):
             # AL: weights and locations are not used for lexicon,
             # only the ngrams of the words in the lexicon for comparing them later with the ngrams activated in stimulus.
-            all_word_ngrams, weights, locations = string_to_open_ngrams(word, ngram_gap)
+            all_word_ngrams, weights, locations = string_to_ngrams(word, bigramFrame, ngram_gap)
             lexicon_word_ngrams[word] = all_word_ngrams
 
         lexicon_word_ngrams = lexicon_word_ngrams
@@ -326,6 +326,7 @@ class ReadingModel:
                  lexicon_filepath: str = '',
                  matrix_filepath: str = '',
                  matrix_parameters_filepath: str = '',
+                 ngram_frequency_filepath: str = '',
                  include_predicted_without_frequencies: bool = False,
                  save_lexicon: bool = False,
                  save_word_inhibition: bool = False,
@@ -431,6 +432,14 @@ class ReadingModel:
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
 
+        if self.ngram_gap == 0:
+            if not ngram_frequency_filepath:
+                if verbose: print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
+                logger.info("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
+            self.bigramFrame = get_ngram_frequency_from_file("../data/raw/UTF-8bigram_eng.csv", sep=';')
+        else:
+            self.bigramFrame = None
+
         # if use predictability but no predictability dict is provided, create predictability dict if texts are provided and if language and pred_source are supported
         if texts and use_predictability and not predictability_values:
             predictability_values = get_word_pred(texts, language=language, pred_source=pred_source, pred_threshold=pred_threshold, topk=top_k, output_word_pred_map=predictability_filepath)
@@ -444,7 +453,7 @@ class ReadingModel:
         self.frequency_values = frequency_values
 
         self.lexicon = add_lexicon(self.processed_tokens, lexicon_filepath, frequency_values, predictability_values, include_predicted_without_frequencies, save_lexicon, verbose)
-        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.ngram_gap, verbose)
+        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.bigramFrame, self.ngram_gap, verbose)
         self.recognition_thresholds = add_recognition_thresholds(self.lexicon, self.max_threshold, self.max_activity,
                                                                  self.freq_weight, frequency_values, self.use_threshold, verbose)
         self.word_inhibitions = add_word_inhibition_matrix(self.lexicon, self.lexicon_word_ngrams, matrix_filepath,
