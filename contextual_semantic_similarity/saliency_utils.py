@@ -263,8 +263,8 @@ def normalize(all_values, method='max-min'):
             norm = None
             if x:
                 norm = (x - min_feature) / (max_feature - min_feature)
-                if norm == 0.0:
-                    norm = 1e-06 # to avoid 0 for minimum
+                # if norm == 0.0:
+                #     norm = 1e-06 # to avoid 0 for minimum
             norm_feature.append(norm)
 
     return norm_feature

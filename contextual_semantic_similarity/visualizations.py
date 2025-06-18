@@ -42,13 +42,20 @@ def display_error(errors, conditions, loss_function, filepath, hue=None, hue_nam
     graph.savefig(filepath, dpi=300)
     plt.clf()
 
-def display_eval(all_values, all_models, all_measures, filepath):
+def display_eval(all_values, all_models, all_measures, filepath, col=None, col_name=None):
 
-    graph = sns.catplot(data= pd.DataFrame({'measure': all_measures,
-                                            'score': all_values,
-                                            'condition': all_models}),
+    data = pd.DataFrame({'measure': all_measures,
+                         'score': all_values,
+                         'condition': all_models})
+    if col:
+        if col_name:
+            data[col_name] = col
+        else:
+            raise ValueError('If col is given, a col_name must be provided.')
+
+    graph = sns.catplot(data= data,
                         x='measure', y='score', hue='condition',
-                        kind='bar', palette='deep')
+                        kind='bar', palette='deep', col=col_name)
 
     # graph.set(xlabel='measure')
     graph.savefig(filepath, dpi=300)

@@ -1,5 +1,4 @@
 import json
-
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -19,7 +18,11 @@ def remove_fixations_nan(data):
             if (math.isnan(context_word.similarity)
                     or math.isnan(context_word.surprisal)
                     or math.isnan(context_word.entropy)
-                    or math.isnan(context_word.length)):
+                    or math.isnan(context_word.length)
+                    or math.isnan(context_word.previous_sacc_distance)
+                    or math.isnan(context_word.previous_fix_duration)
+                    or context_word.pos_tag == ''
+                    or math.isnan(context_word.frequency)):
                 fixations_to_exclude.append((i[0],i[1],i[2]))
 
     data['fixid'] = data.apply(lambda x: np.nan if (x['participant_id'], x['trialid'], x['fixid']) in fixations_to_exclude else x['fixid'], axis=1).copy()
@@ -32,19 +35,26 @@ def pre_process_fixation_data(fixation_data, norm_method='max-min'):
     # remove fixations with nan values in feature columns
     print('Remove fixations with nan values...')
     fixation_data = remove_fixations_nan(fixation_data)
-
+    # category features: from str to int
+    pos_tag_map = defaultdict(int)
+    counter = 0
+    for pos_tag in fixation_data['pos_tag'].unique():
+        pos_tag_map[pos_tag] = counter
+        counter += 1
+    fixation_data['pos_tag_index'] = fixation_data['pos_tag'].map(pos_tag_map)
     # normalize variables for combination computation
     print('Normalizing features...')
-    for feature in ['length', 'entropy', 'surprisal']:
+    for feature in ['length', 'similarity', 'entropy', 'surprisal', 'distance', 'previous_sacc_distance', 'previous_fix_duration', 'pos_tag_index', 'frequency']:
         norm_feature = normalize(fixation_data[feature].tolist(), norm_method)
         fixation_data[f'norm_{feature}'] = norm_feature
-    # convert entropy values from previous context to 0.0001
+    # convert entropy values from previous context to minimum
+    min_entropy = 1e-06
+    min_entropy = fixation_data['norm_entropy'].min()
     fixation_data['norm_entropy'] = fixation_data.apply(
-        lambda x: 1e-06 if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis=1)
-
+        lambda x: min_entropy if x['distance'] in [-3, -2, -1, 0] else x['norm_entropy'], axis=1)
     return fixation_data
 
-def compute_input_arrays(fixation_data, filepath, letter_map=None, features='similarity,length,entropy,surprisal'):
+def compute_input_arrays(fixation_data, filepath, letter_map=None, features='similarity,length,entropy,surprisal', position_weights=None):
 
     all_features = []
 
@@ -54,7 +64,8 @@ def compute_input_arrays(fixation_data, filepath, letter_map=None, features='sim
         pos_letter7_2right = None
 
         if letter_map and '7letter_2right' in features:
-            pos_letter7_2right = baseline_7letter_2right(context, letter_map, level_type='word') # find which word and letter 7 letters to the right
+            # find which word and letter 7 letters to the right
+            pos_letter7_2right = baseline_7letter_2right(context, letter_map, level_type='word')
 
         for context_word in context.itertuples():
 
@@ -66,15 +77,46 @@ def compute_input_arrays(fixation_data, filepath, letter_map=None, features='sim
                     fixation_features['7letter_2right'].append(0.)
 
             if 'similarity' in features:
-                fixation_features['similarity'].append(context_word.similarity)
+                if position_weights:
+                    fixation_features['similarity'].append(context_word.norm_similarity*position_weights[context_word.distance])
+                else:
+                    fixation_features['similarity'].append(context_word.norm_similarity)
             if 'length' in features:
-                fixation_features['length'].append(context_word.norm_length)
+                if position_weights:
+                    fixation_features['length'].append(context_word.norm_length*position_weights[context_word.distance])
+                else:
+                    fixation_features['length'].append(context_word.norm_length)
             if 'entropy' in features:
-                fixation_features['entropy'].append(context_word.norm_entropy)
+                if position_weights:
+                    fixation_features['entropy'].append(context_word.norm_entropy*position_weights[context_word.distance])
+                else:
+                    fixation_features['entropy'].append(context_word.norm_entropy)
             if 'surprisal' in features:
-                fixation_features['surprisal'].append(context_word.norm_surprisal)
+                if position_weights:
+                    fixation_features['surprisal'].append(context_word.norm_surprisal*position_weights[context_word.distance])
+                else:
+                    fixation_features['surprisal'].append(context_word.norm_surprisal)
+            if 'pos_tag' in features:
+                if position_weights:
+                    fixation_features['pos_tag_index'].append(context_word.norm_pos_tag_index*position_weights[context_word.distance])
+                else:
+                    fixation_features['pos_tag_index'].append(context_word.norm_pos_tag_index)
+            if 'frequency' in features:
+                if position_weights:
+                    fixation_features['frequency'].append(context_word.norm_frequency*position_weights[context_word.distance])
+                else:
+                    fixation_features['frequency'].append(context_word.norm_frequency)
 
-        all_features.append([feature_list for feature_list in fixation_features.values()])
+        if 'previous_sacc_distance' in features:
+            fixation_features['previous_sacc_distance'].append(context['norm_previous_sacc_distance'].tolist()[0])
+        if 'previous_fix_duration' in features:
+            fixation_features['previous_fix_duration'].append(context['norm_previous_fix_duration'].tolist()[0])
+
+        fixation_features_unroll = []
+        for feature_list in fixation_features.values():
+            fixation_features_unroll.extend(feature_list)
+        all_features.append(fixation_features_unroll)
+        # all_features.append([feature_list for feature_list in fixation_features.values()])
 
     x = torch.tensor(all_features)
     torch.save(x, filepath)
@@ -128,11 +170,12 @@ def compute_baseline_arrays(fixation_data, filepath, level_type, letter_map, bas
     y_base = torch.tensor(pred_end_positions)
     torch.save(y_base, filepath)
 
-def convert_data_to_tensors(eye_data, word_data, opt_dir, level='word', features='similarity,length,entropy,surprisal', pre_process=False, data_filepath=''):
+def convert_data_to_tensors(eye_data, word_data, opt_dir, level='word', features='similarity,length,entropy,surprisal',
+                            pre_process=False, norm_method='max-min', data_filepath='', position_weights=None):
 
     if pre_process:
         print('Pre-processing data...')
-        eye_data = pre_process_fixation_data(eye_data)
+        eye_data = pre_process_fixation_data(eye_data, norm_method)
         if data_filepath:
             eye_data.to_csv(data_filepath.replace('_df.csv', '_cleaned.csv'), index=False)
 
@@ -141,41 +184,39 @@ def convert_data_to_tensors(eye_data, word_data, opt_dir, level='word', features
         json.dump(letter_map, f, indent=4)
 
     # compute feature and true target arrays
-    for text_id in eye_data['trialid'].unique():
+    for _id, trial_data in eye_data.groupby(['participant_id', 'trialid']):
 
-        text_eye_data = eye_data[eye_data['trialid'] == text_id].copy()
-
-        x_filepath = f'{opt_dir}/x_{text_id}_tensor.pt'
-        y_filepath = f'{opt_dir}/y_{text_id}_{level}_tensor.pt'
+        x_filepath = f'{opt_dir}/x_{_id[0]}_{_id[1]}_tensor.pt'
+        y_filepath = f'{opt_dir}/y_{_id[0]}_{_id[1]}_tensor.pt' # {level}
 
         if not os.path.exists(x_filepath):
-            print(f'Computing x arrays of text {text_id}...')
-            compute_input_arrays(text_eye_data, x_filepath, letter_map, features)
+            print(f'Computing x arrays of participant {_id[0]}, text {_id[1]}...')
+            compute_input_arrays(trial_data, x_filepath, letter_map, features, position_weights)
         if not os.path.exists(y_filepath):
-            print(f'Computing y arrays of text {text_id}...')
-            compute_true_target_arrays(text_eye_data, y_filepath, level)
+            print(f'Computing y arrays of participant {_id[0]}, text {_id[1]}...')
+            compute_true_target_arrays(trial_data, y_filepath, level)
         if level == 'letter':
-            letter_filepath = f'{opt_dir}/letter_positions_{text_id}_tensor.pt'
+            letter_filepath = f'{opt_dir}/letter_positions_{_id[0]}_{_id[1]}_tensor.pt'
             if not os.path.exists(letter_filepath):
-                print(f'Computing letter position arrays of text {text_id}...')
-                compute_letter_position_arrays(text_eye_data, letter_filepath, letter_map)
+                print(f'Computing letter position arrays of participant {_id[0]}, text {_id[1]}...')
+                compute_letter_position_arrays(trial_data, letter_filepath, letter_map)
         for baseline in ['next_word']: # '7letter_2right'
-            y_base_filepath = f'{opt_dir}/y_{text_id}_{baseline}_{level}_tensor.pt'
+            y_base_filepath = f'{opt_dir}/y_{_id[0]}_{_id[1]}_{baseline}_tensor.pt' # {level}
             if not os.path.exists(y_base_filepath):
-                print(f'Computing {baseline} baseline arrays of text {text_id}...')
-                compute_baseline_arrays(text_eye_data, y_base_filepath, level, letter_map, baseline)
+                print(f'Computing {baseline} baseline arrays of participant {_id[0]}, text {_id[1]}...')
+                compute_baseline_arrays(trial_data, y_base_filepath, level, letter_map, baseline)
 
-def split_data(text_ids, split_type='cross-validation', n_splits=5, test_size=.2, shuffle=False, random_state=42, filepath=''):
+def split_data(_ids, split_type='cross-validation', n_splits=5, test_size=.2, shuffle=False, random_state=42, filepath=''):
 
     splits = []
 
     if split_type == 'cross-validation':
         kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
-        for train_index, test_index in kf.split(text_ids):
+        for train_index, test_index in kf.split(_ids):
             splits.append({'train_index': train_index, 'test_index': test_index})
 
     else:
-        train, test = train_test_split(text_ids, test_size=test_size, shuffle=shuffle, random_state=random_state)
+        train, test = train_test_split(_ids, test_size=test_size, shuffle=shuffle, random_state=random_state)
         splits.append({'train_index': train, 'test_index': test})
 
     if filepath:
@@ -192,9 +233,9 @@ def load_tensors(filepaths):
 
     if filepaths:
         for filepath in filepaths:
-            tensor = torch.load(filepath)
-            all_arrays.append(tensor)
-
+            if os.path.exists(filepath):
+                tensor = torch.load(filepath)
+                all_arrays.append(tensor)
         # shape = (n_fixations, n_features, context_window_size) if x tensors
         # shape = (n_fixations) if y tensors
         tensor = torch.cat(all_arrays, dim=0)
@@ -203,15 +244,85 @@ def load_tensors(filepaths):
 
     return tensor
 
-def load_baseline_tensors(split, baseline, opt_dir, level='word'):
+def load_baseline_tensors(split_ids, baseline, opt_dir, level='word'):
 
     baseline_filepaths = []
-    for text_id in split:
-        baseline_filepaths.append(f'{opt_dir}/y_{text_id}_{baseline}_{level}_tensor.pt')
+
+    for _id in split_ids:
+
+        _id = _id.split(',')
+        participant_id = _id[0]
+        text_id = _id[1]
+
+        baseline_filepaths.append(f'{opt_dir}/y_{participant_id}_{text_id}_{baseline}_tensor.pt') # {level}
 
     predicted = load_tensors(baseline_filepaths)
 
     return predicted
+
+def compute_split_arrays(_ids, directory, level='word', class_indices=True, random=False,
+                         features_to_select='', all_features=''):
+
+    x_filepaths, y_filepaths, letter_pos_filepaths = [], [], []
+
+    for i, _id in enumerate(_ids):
+
+        _id = _id.split(',')
+        participant_id = _id[0]
+        text_id = _id[1]
+
+        x_filepaths.append(f'{directory}/x_{participant_id}_{text_id}_tensor.pt')
+        y_filepaths.append(f'{directory}/y_{participant_id}_{text_id}_tensor.pt') # {level}
+        if level == 'letter':
+            letter_pos_filepaths.append(f'{directory}/letter_positions_{participant_id}_{text_id}_tensor.pt')
+
+    x_tensor = load_tensors(x_filepaths)
+    y_tensor = load_tensors(y_filepaths)
+    letpos_tensor = load_tensors(letter_pos_filepaths)
+
+    # remove feature(s) not selected for feature ablation
+    if features_to_select:
+        if all_features:
+            feature_map = defaultdict(tuple)
+            feature_end = 0
+            # MAKE SURE FEATURES IN ALL_FEATURES ARE IN THE SAME ORDER AS IN THE INPUT VECTOR
+            for i, feature in enumerate(all_features.split(',')):
+                if feature in ['previous_sacc_distance', 'previous_fix_duration']:
+                    feature_map[feature] = (feature_end, feature_end)
+                    feature_end += 1
+                else:
+                    feature_map[feature] = (feature_end, feature_end+7) # assuming 7 words in input
+                    feature_end += 7 # assuming 7 words in input
+            x_data = []
+            for fixation_array in x_tensor:
+                fixation_features = []
+                for feature in features_to_select.split(','):
+                    if feature in ['previous_sacc_distance', 'previous_fix_duration']:
+                        feature_values = fixation_array[feature_map[feature][0]]
+                        fixation_features.append(feature_values)
+                    else:
+                        feature_values = fixation_array[feature_map[feature][0]:feature_map[feature][1]]
+                        fixation_features.extend(feature_values)
+                x_data.append(torch.tensor(fixation_features))
+            x_tensor = torch.stack(x_data)
+        else:
+            raise ValueError('For feature selection, please provide the name of all features from which to select features. "all_features" should not be empty.')
+
+    # if concatenate:
+    #     # concatenate features so that x shape is (n_fixations, n_features*context_window_size)
+    #     x_tensor = x_tensor.flatten(1,2)
+
+    if class_indices:
+        # change labels to class indices (as required by pytorch)
+        y_tensor = y_tensor + torch.tensor([3])
+
+    if random:
+        # compute random input vectors for random baseline
+        x_tensor = torch.randn(x_tensor.shape)
+
+    assert x_tensor.shape[0] == y_tensor.shape[0]
+
+    return x_tensor, y_tensor, letpos_tensor
 
 def clean_tensors(true_targets, pred_targets):
 
@@ -229,81 +340,41 @@ def clean_tensors(true_targets, pred_targets):
 
     return true_targets, pred_targets
 
-def compute_split_arrays(trialids, directory, level='word',
-                         features='similarity,length,entropy,surprisal',
-                         concatenate=True, class_indices=True,
-                         random=False):
+# def compute_participant_indices(eye_data, split_ids):
+#
+#     participant_indices = defaultdict(list)
+#     counter = 0
+#     for text_id in split_ids:
+#         text_data = eye_data[eye_data['trialid']==text_id].copy()
+#         for participant, fixation in text_data.groupby(['participant_id', 'fixid']):
+#             participant_indices[participant[0]].append(counter)
+#             counter += 1
+#
+#     return participant_indices
 
-    x_filepaths, y_filepaths, letter_pos_filepaths = [], [], []
-
-    for i, text_id in enumerate(trialids):
-
-        x_filepaths.append(f'{directory}/x_{text_id}_tensor.pt')
-        y_filepaths.append(f'{directory}/y_{text_id}_{level}_tensor.pt')
-        if level == 'letter':
-            letter_pos_filepaths.append(f'{directory}/letter_positions_{text_id}_tensor.pt')
-
-    x_tensor = load_tensors(x_filepaths)
-    y_tensor = load_tensors(y_filepaths)
-    letpos_tensor = load_tensors(letter_pos_filepaths)
-
-    # remove feature(s) not selected
-    x_data = []
-    for fixation_array in x_tensor:
-        fixation_features = []
-        # MAKE SURE THE ORDER OF THE FEATURES IS THE SAME AS THE ORDER OF FEATURES IN THE INPUT VECTORS
-        for feature_array, feature in zip(fixation_array, ['similarity', 'length', 'entropy', 'surprisal']): # 7letter_2right
-            if feature in features.split(','):
-                fixation_features.append(feature_array)
-        fixation_features = torch.stack(fixation_features)
-        x_data.append(fixation_features)
-    x_tensor = torch.stack(x_data)
-
-    if concatenate:
-        # concatenate features so that x shape is (n_fixations, n_features*context_window_size)
-        x_tensor = x_tensor.flatten(1,2)
-
-    if class_indices:
-        # change labels to class indices (as required by pytorch)
-        y_tensor = y_tensor + torch.tensor([3])
-
-    if random:
-        x_tensor = torch.randn(x_tensor.shape)
-
-    assert x_tensor.shape[0] == y_tensor.shape[0]
-
-    return x_tensor, y_tensor, letpos_tensor
-
-def compute_participant_indices(eye_data, split_ids):
-
-    participant_indices = defaultdict(list)
-    counter = 0
-    for text_id in split_ids:
-        text_data = eye_data[eye_data['trialid']==text_id].copy()
-        for participant, fixation in text_data.groupby(['participant_id', 'fixid']):
-            participant_indices[participant[0]].append(counter)
-            counter += 1
-
-    return participant_indices
-
-def compute_participant_split_array(participant_indices, x_tensor, y_tensor, letpos_tensor=None):
-
-    participant_indices = torch.tensor(participant_indices)
-    x_tensor = torch.index_select(x_tensor, dim=0, index=participant_indices)
-    y_tensor = torch.index_select(y_tensor, dim=0, index=participant_indices)
-    if letpos_tensor:
-        letpos_tensor = torch.index_select(letpos_tensor, dim=0, index=participant_indices)
-
-    return x_tensor, y_tensor, letpos_tensor
-
+# def compute_participant_split_array(participant_indices, x_tensor, y_tensor, letpos_tensor=None):
+#
+#     participant_indices = torch.tensor(participant_indices)
+#     x_tensor = torch.index_select(x_tensor, dim=0, index=participant_indices)
+#     y_tensor = torch.index_select(y_tensor, dim=0, index=participant_indices)
+#     if letpos_tensor:
+#         letpos_tensor = torch.index_select(letpos_tensor, dim=0, index=participant_indices)
+#
+#     return x_tensor, y_tensor, letpos_tensor
 
 class FixationDataset(Dataset):
 
-  def __init__(self, text_IDs, opt_dir, features='similarity,length,surprisal,entropy', random=False):
+  def __init__(self,
+               split_ids,
+               _dir,
+               features_to_select='',
+               all_features='',
+               random=False):
 
-        self.x_tensor, self.y_tensor, _ = compute_split_arrays(trialids=text_IDs, directory=opt_dir, features=features,
-                                                               concatenate=True, class_indices=True,
-                                                               random=random)
+        self.x_tensor, self.y_tensor, _ = compute_split_arrays(_ids=split_ids, directory=_dir,
+                                                               features_to_select=features_to_select,
+                                                               all_features=all_features,
+                                                               class_indices=True, random=random)
         self.item_IDs = range(self.x_tensor.shape[0])
 
   def __len__(self):

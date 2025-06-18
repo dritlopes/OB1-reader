@@ -319,8 +319,15 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
 
     # iter through each fixation
     for i in eye_move_df_filtered.itertuples():
+        previous_sacc_distance, previous_fix_duration = None, None
         # find saccade distance
         saccade_distance = i.next_saccade_distance
+        previous_fix = eye_move_df[(eye_move_df['participant_id']==i.participant_id) & (eye_move_df['trialid']==i.trialid) & (eye_move_df['fixid']==i.fixid-1)]
+        if not previous_fix.empty:
+            # find previous saccade distance
+            previous_sacc_distance = previous_fix['next_saccade_distance'].tolist()[0]
+            # find previous fixation duration
+            previous_fix_duration = previous_fix['dur'].tolist()[0]
         # iter through each context word of fixated word
         context = similarity_df[(similarity_df['trialid'] == i.trialid) & (similarity_df['ianum'] == i.ianum)]
         # filter contexts with all six positions
@@ -334,6 +341,8 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
             window_dict['ia'].append(i.ia)
             window_dict['letternum'].append(i.letternum)
             window_dict['letter'].append(i.letter)
+            window_dict['previous_sacc_distance'].append(previous_sacc_distance)
+            window_dict['previous_fix_duration'].append(previous_fix_duration)
             window_dict['context_ianum'].append(i.ianum)
             window_dict['context_ia'].append(i.ia)
             window_dict['length'].append(len(i.ia))
@@ -382,6 +391,8 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
                 window_dict['ia'].append(i.ia)
                 window_dict['letternum'].append(i.letternum)
                 window_dict['letter'].append(i.letter)
+                window_dict['previous_sacc_distance'].append(previous_sacc_distance)
+                window_dict['previous_fix_duration'].append(previous_fix_duration)
                 window_dict['context_ianum'].append(context_word.context_ianum)
                 window_dict['context_ia'].append(context_word.context_ia)
                 window_dict['length'].append(len(context_word.context_ia))
@@ -410,7 +421,7 @@ def main():
     model_name = 'gpt2' # meta-llama_Llama-2-7b-hf
     corpus_name = 'meco' # provo
     context_type = 'window' # previous_context
-    layers = [[11]] # last hidden layer of GPT2
+    layers = [[1]]
     model_token = '' # needed if llama is the language model
     model_name_dir = model_name.replace('/', '_')
     words_filepath = f'data/processed/{corpus_name}/words_en_df.csv' # path to file with word dataset

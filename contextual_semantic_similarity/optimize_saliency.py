@@ -12,7 +12,6 @@ from scipy.stats import ttest_rel
 
 from contextual_semantic_similarity.visualizations import display_prediction_distribution
 from prepare_data import (convert_data_to_tensors, split_data, compute_split_arrays,
-                          compute_participant_indices, compute_participant_split_array,
                           load_baseline_tensors, clean_tensors)
 from visualizations import display_error
 

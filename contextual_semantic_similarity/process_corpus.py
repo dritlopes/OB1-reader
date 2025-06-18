@@ -2,8 +2,6 @@ import pandas as pd
 import numpy as np
 import rdata
 import spacy
-from sacremoses import corpus
-
 
 class WordData:
 
@@ -346,7 +344,7 @@ class MecoData:
 
         # make sure outliers are excluded (out = fixation outside the area of the text)
         df = df[df['type']=="in"]
-        df = df[['uniform_id','trialid', 'dur', 'letternum', 'letter', 'ia', 'ianum', 'ia.reg.in', 'ia.reg.out', 'ia.firstskip', 'ia.refix']]
+        df = df[['uniform_id','trialid', 'fixid', 'dur', 'letternum', 'letter', 'ia', 'ianum', 'ia.reg.in', 'ia.reg.out', 'ia.firstskip', 'ia.refix']]
 
         # trialid should start at 0, not at 1
         df['trialid'] = df['trialid'].apply(lambda x: int(x) - 1)
@@ -486,6 +484,8 @@ def add_variables(variables:list[str], df:pd.DataFrame, corpus_name:str, frequen
             doc = nlp(word)
             pos_tag_col.append(doc[0].pos_)
         df['pos_tag'] = pos_tag_col
+
+    # TODO add dependency parsing labels
 
     return df
 
