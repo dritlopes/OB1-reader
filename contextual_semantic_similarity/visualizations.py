@@ -47,6 +47,7 @@ def display_eval(all_values, all_models, all_measures, filepath, col=None, col_n
     data = pd.DataFrame({'measure': all_measures,
                          'score': all_values,
                          'condition': all_models})
+
     if col:
         if col_name:
             data[col_name] = col

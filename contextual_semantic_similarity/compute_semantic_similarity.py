@@ -6,105 +6,7 @@ from collections import defaultdict
 import torch
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from transformers import LlamaForCausalLM, LlamaTokenizer
-from sklearn.preprocessing import normalize
-
-def generate_embeddings(words:list[str],
-                        model:GPT2LMHeadModel|LlamaForCausalLM,
-                        tokenizer:GPT2Tokenizer|LlamaTokenizer,
-                        device:torch.device,
-                        layer_combi:list[int],
-                        model_name:str)-> (list,list,dict):
-
-    """
-    Extract embeddings for each sequence
-    Args:
-        words: words from text
-        model: gpt2 or llama
-        tokenizer: gpt2 or llama tokenizer
-        device: cuda or cpu
-        layer_combi: list of layer numbers
-        model_name: name of language model
-
-    Returns: list of embeddings, list of respective sequences, dictionary with map between (text) word and (language model) token positions
-
-    """
-
-    sequence_vectors, sequences = [], []
-    word_token_pos_map = dict()
-
-    for i, word in enumerate(words):
-        sequence_vectors_per_layer = []
-        sequence = ' '.join(words[:i+1])
-        sequences.append(sequence)
-        # print(sequence)
-        # print(word)
-        # use the tokenizer
-        # tokens = tokenizer.tokenize(sequence)
-        tokens = tokenizer(sequence, return_tensors='pt').to(device)
-        # token_ids = tokenizer.convert_tokens_to_ids(tokens)
-        # convert the matrix format to torch tensor
-        # tokens_tensor = torch.tensor(token_ids).unsqueeze(0).to(device)
-        tokens_tensor = tokens['input_ids']
-        # print(tokens_tensor)
-
-        # find position of last word in token sequence
-        if 'gpt' in model_name:
-            if i != 0:
-                word = ' ' + word
-        word_tokens = tokenizer.tokenize(word)
-        # print(word_tokens)
-        sequence_tokens = tokenizer.tokenize(sequence)
-        # print(sequence_tokens)
-        # map words to token positions
-        word_token_pos_map[i] = [pos for pos in range(len(sequence_tokens)-len(word_tokens), len(sequence_tokens))]
-
-        # Get the model output, see https://huggingface.co/docs/transformers/en/model_doc/gpt2#transformers.models.gpt2.modeling_gpt2.GPT2DoubleHeadsModelOutput for details
-        model.eval()  # turn off dropout layers
-        output = model(tokens_tensor, output_hidden_states=True)
-        # print(output)
-        # Extract the hidden states for all layers
-        layers = output.hidden_states
-        # hidden_state[0] = word embeddings + positional embedding, hidden_state[-1] = output
-        # print(range(len(layers)))
-
-        for layer in layer_combi:
-            if layer in range(len(layers)):
-                # Our batch consists of a single sequence, so we simply extract the first one
-                # The sentence vector is a list of vectors, one for each token in the sequence
-                # Each token vector consists of n dimensions
-                # print(layers[layer])
-                sequence_vector = layers[layer][0].cpu().detach().numpy()
-                # print(sequence_vector)
-                sequence_vectors_per_layer.append(sequence_vector)
-            else:
-                raise Exception(f'Selected layer {layer} not in language model. Range of hidden layers in language model: {len(layers)}')
-        sequence_vectors.append(sequence_vectors_per_layer)
-
-    assert len(sequences) == len(sequence_vectors), print(len(sequences), len(sequence_vectors))
-
-    return sequence_vectors, sequences, word_token_pos_map
-
-def aggregate_layers(embeddings:list[np.array], layers:list[int]) -> list[np.array]:
-
-    """
-    Combine representations from different layers into a single vector for each sequence.
-    Args:
-        embeddings: list of embeddings
-        layers: list of layer numbers
-
-    Returns: averaged vectors
-
-    """
-
-    # aggregate embeddings across layers to get unique representation
-    aggregated_embeddings = []
-    for sequence_embeddings in embeddings: # loop through each sequence
-        all_layers = []
-        for n in range(len(layers)): # loop through each layer representation of that sequence
-            all_layers.append(sequence_embeddings[n])
-        aggregated_embeddings.append(np.mean(np.array(all_layers), axis=0))
-
-    return aggregated_embeddings
+from compute_embeddings import generate_embeddings, aggregate_layers
 
 def get_similarity(embeddings:list[np.array],
                    word_token_pos_map:dict[int:list],
@@ -201,6 +103,7 @@ def get_similarity(embeddings:list[np.array],
             else:
                 sim = None
             similarities.append(sim)
+
             # print(sim)
         assert len(similarities) == len(sequences), print(len(similarities), len(sequences))
 
@@ -283,8 +186,8 @@ def calculate_similarity_values(words_df: pd.DataFrame,
     # if context type is previous context, simply add similarity scores as a column to the words data
     else:
         all_similarity = [row for text_rows in all_similarity for row in text_rows]
-        # print(all_similarity)
         words_df['similarity'] = all_similarity
+        # print(all_similarity)
 
     # save dataframe with similarity score
     directory = os.path.dirname(path_to_save)
@@ -322,12 +225,14 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
         previous_sacc_distance, previous_fix_duration = None, None
         # find saccade distance
         saccade_distance = i.next_saccade_distance
-        previous_fix = eye_move_df[(eye_move_df['participant_id']==i.participant_id) & (eye_move_df['trialid']==i.trialid) & (eye_move_df['fixid']==i.fixid-1)]
+        previous_fixations = eye_move_df[(eye_move_df['participant_id']==i.participant_id) & (eye_move_df['trialid']==i.trialid) & (eye_move_df['fixid'] < i.fixid)]
+        previous_fix = previous_fixations[previous_fixations['fixid']==i.fixid-1]
         if not previous_fix.empty:
             # find previous saccade distance
             previous_sacc_distance = previous_fix['next_saccade_distance'].tolist()[0]
             # find previous fixation duration
             previous_fix_duration = previous_fix['dur'].tolist()[0]
+
         # iter through each context word of fixated word
         context = similarity_df[(similarity_df['trialid'] == i.trialid) & (similarity_df['ianum'] == i.ianum)]
         # filter contexts with all six positions
@@ -359,12 +264,19 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
             else:
                 window_dict['letter_distance'].append(None)
                 window_dict['landing_target'].append(0)
+            # find whether the word has been fixated before
+            if i.ianum in previous_fixations['ianum'].tolist():
+                has_been_fixated = 1
+            else:
+                has_been_fixated = 0
+            window_dict['has_been_fixated'].append(has_been_fixated)
 
             # Add each context word
             for context_word in context.itertuples():
                 # add other word context variables
                 saccade_target, letter_distance = 0, None
                 frequency, pos_tag, surprisal, entropy = None, None, None, None
+                has_been_fixated = 0
                 # saccade target and letter distance
                 if saccade_distance == context_word.distance:
                     saccade_target = 1
@@ -384,6 +296,8 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
                 if 'entropy' in eye_move_df_filtered.columns:
                     if len(rows['entropy'].tolist()) > 0:
                         entropy = rows['entropy'].tolist()[0]
+                if context_word.context_ianum in previous_fixations['ianum'].tolist():
+                    has_been_fixated = 1
                 window_dict['participant_id'].append(i.participant_id)
                 window_dict['trialid'].append(i.trialid)
                 window_dict['fixid'].append(i.fixid)
@@ -404,6 +318,7 @@ def merge_eye_sim_window(similarity_df:pd.DataFrame, eye_move_df:pd.DataFrame) -
                 window_dict['distance'].append(context_word.distance)
                 window_dict['letter_distance'].append(letter_distance)
                 window_dict['landing_target'].append(saccade_target)
+                window_dict['has_been_fixated'].append(has_been_fixated)
 
     df = pd.DataFrame.from_dict(window_dict)
     df.sort_values(by=['participant_id','trialid','fixid','distance'], inplace=True)
@@ -480,7 +395,7 @@ def main():
             eye_move_df_filtered = eye_move_df.loc[eye_move_df['ianum'].isin(similarity_df['ianum'].tolist())
                                           & eye_move_df['ia'].isin(similarity_df['ia'].tolist())
                                           & eye_move_df['trialid'].isin(similarity_df['trialid'].tolist())]
-            eye_move_sim_df = pd.merge(eye_move_df_filtered, similarity_df[['trialid', 'ianum', 'similarity']], how='left',
+            eye_move_sim_df = pd.merge(eye_move_df_filtered, similarity_df[['trialid', 'ianum', 'similarity', 'context_embedding', 'word_embedding']], how='left',
                                        on=['trialid', 'ianum'])
             eye_move_sim_df.to_csv(eye_move_sim_filepath)
         elif context_type == 'window':

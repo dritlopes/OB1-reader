@@ -2,78 +2,6 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict
 import math
-import json
-from contextual_semantic_similarity.process_corpus import check_alignment
-
-def fix_misalignment_letter_map(row, letter_ids):
-
-    if row.trialid == 0 and row.ianum > 20:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 40:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 62:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 79:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 96:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 114:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 132:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 149:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 163:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 0 and row.ianum > 180:
-        letter_ids = [p - 1 for p in letter_ids]
-
-    if row.trialid == 1 and row.ianum > 5:
-        letter_ids = [p + 1 for p in letter_ids]
-    if row.trialid == 1 and row.ianum == 7:
-        letter_ids = [p if p < 47 else 48 for p in letter_ids]
-
-    if row.trialid == 2 and row.ianum > 9:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 2 and row.ianum > 16:
-        letter_ids = [p - 1 for p in letter_ids]
-
-    if row.trialid == 3 and row.ianum > 17:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 33:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 36:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 53:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 75:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 91:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 108:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 124:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 3 and row.ianum > 141:
-        letter_ids = [p - 1 for p in letter_ids]
-
-    if row.trialid == 4 and row.ianum > 18:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 4 and row.ianum > 36:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 4 and row.ianum > 51:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 4 and row.ianum > 67:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 4 and row.ianum > 83:
-        letter_ids = [p - 1 for p in letter_ids]
-    if row.trialid == 4 and row.ianum > 85:
-        letter_ids = [p - 1 for p in letter_ids]
-    # if row.trialid == 4 and row.ianum > 94:
-    #     letter_ids = [p - 1 for p in letter_ids]
-
-
-    return letter_ids
 
 def compute_letter_map(words_df):
 
@@ -249,7 +177,7 @@ def centre_of_mass(saliencies, positions):
 
     return (1/np.sum(saliencies))*np.sum([saliency*position for saliency,position in zip(saliencies,positions)])
 
-def normalize(all_values, method='max-min'):
+def normalize(all_values, method='z-score'):
 
     if method == 'z-score':
         norm_feature = (all_values - np.mean(all_values)) / np.std(all_values)
