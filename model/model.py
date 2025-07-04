@@ -4,10 +4,11 @@ import pickle
 import os
 import logging
 from datetime import datetime
+from itertools import combinations
 from model_components import sequence_read
-from reading_helper_functions import string_to_open_ngrams
+from reading_helper_functions import string_to_ngrams
 import task_attributes
-from utils import write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
+from utils import get_ngram_frequency_from_file, write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
 
 # will create a new file everytime, stamped with date and time
 now = datetime.now()
@@ -53,6 +54,7 @@ def add_lexicon(words:list,
                 logger.info('No text words given to lexicon.')
 
         lexicon = set(words)
+
         if verbose:
             print(f'Lexicon size including input words: {len(lexicon)}')
         logger.info(f'Lexicon size including input words: {len(lexicon)}')
@@ -91,12 +93,12 @@ def add_lexicon(words:list,
             dir_path = os.path.dirname(lexicon_filepath)
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path)
-        with open(lexicon_filepath, 'wb') as outfile:
-            pickle.dump(lexicon, outfile)
+            with open(lexicon_filepath, 'wb') as outfile:
+                pickle.dump(lexicon, outfile)
 
     return lexicon
 
-def add_lexicon_ngram_mapping(lexicon:list, ngram_gap:int, verbose:bool) -> dict:
+def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:bool) -> dict:
 
     """
     Creates mapping between each word in the lexicon and its ngrams.
@@ -115,7 +117,7 @@ def add_lexicon_ngram_mapping(lexicon:list, ngram_gap:int, verbose:bool) -> dict
         for i, word in enumerate(lexicon):
             # AL: weights and locations are not used for lexicon,
             # only the ngrams of the words in the lexicon for comparing them later with the ngrams activated in stimulus.
-            all_word_ngrams, weights, locations = string_to_open_ngrams(word, ngram_gap)
+            all_word_ngrams, weights, locations = string_to_ngrams(word, bigramFrame, ngram_gap)
             lexicon_word_ngrams[word] = all_word_ngrams
 
         lexicon_word_ngrams = lexicon_word_ngrams
@@ -202,26 +204,28 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
 
     if os.path.exists(matrix_filepath):
 
-        if os.path.exists(matrix_parameters_filepath):
+        # if os.path.exists(matrix_parameters_filepath):
+        #
+        #     with open(matrix_parameters_filepath, "rb") as f:
+        #         parameters_previous = pickle.load(f)
+        #
+        #     size_of_file = os.path.getsize(matrix_filepath)
+        #
+        #     # NV: The file size is also added as a check
+        #     # the idea is that the matrix is fully dependent on these parameters alone.
+        #     # So, if the parameters are the same, the matrix should be the same.
+        #     if str(lexicon_word_ngrams) + str(len(lexicon)) + str(size_of_file) \
+        #             == parameters_previous:
+        #         previous_matrix_usable = True
+        #
+        # if previous_matrix_usable:
+        print('Loading previously saved inhibition matrix...')
+        with open(matrix_filepath, "rb") as f:
+            word_inhibition_matrix = pickle.load(f)
+            return word_inhibition_matrix
 
-            with open(matrix_parameters_filepath, "rb") as f:
-                parameters_previous = pickle.load(f)
-
-            size_of_file = os.path.getsize(matrix_filepath)
-
-            # NV: The file size is also added as a check
-            # the idea is that the matrix is fully dependent on these parameters alone.
-            # So, if the parameters are the same, the matrix should be the same.
-            if str(lexicon_word_ngrams) + str(len(lexicon)) + str(size_of_file) \
-                    == parameters_previous:
-                previous_matrix_usable = True
-
-        if previous_matrix_usable:
-            with open(matrix_filepath, "rb") as f:
-                word_inhibition_matrix = pickle.load(f)
-                return word_inhibition_matrix
-
-    elif not previous_matrix_usable:
+    # if not previous_matrix_usable:
+    else:
         print('No previous inhibition matrix. Creating one...')
 
         if lexicon and lexicon_word_ngrams:
@@ -229,35 +233,32 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
             lexicon_size = len(lexicon)
             word_inhibition_matrix = np.zeros((lexicon_size, lexicon_size), dtype=float)
 
-            for word_1_index in range(lexicon_size):  # MM: receiving unit...
-                # AL: make sure word1-word2, but not word2-word1 or word1-word1.
-                for word_2_index in range(word_1_index + 1, lexicon_size):  # MM: sending unit
-                    word1, word2 = lexicon[word_1_index], lexicon[word_2_index]
-                    # the degree of length similarity
-                    length_sim = 1 - (abs(len(word1) - len(word2)) / max(len(word1), len(word2)))
-                    # if not is_similar_word_length(len(word1), len(word2), pm.word_length_similarity_constant):
-                    #     continue
-                    # else:
-                    # AL: lexicon_word_ngrams already contains all ngrams (bigrams and included monograms)
-                    ngram_common = list(
-                        set(lexicon_word_ngrams[word1]).intersection(set(lexicon_word_ngrams[word2])))
-                    n_total_overlap = len(ngram_common)
-                    # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
-                    word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
-                        len(lexicon_word_ngrams[word1]))) * length_sim
-                    word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
-                        len(lexicon_word_ngrams[word2]))) * length_sim
-                    # print("word1 ", word1, "word2 ", word2, "overlap ", n_total_overlap, "len w1 ", len(lexicon_word_ngrams[word1]))
-                    # print("inhib one way", word_overlap_matrix[word_1_index, word_2_index])
+            for pair in combinations(lexicon, 2):
+                word1, word2 = pair[0], pair[1]
+                # the degree of length similarity
+                length_sim = 1 - (abs(len(word1) - len(word2)) / max(len(word1), len(word2)))
+                # if not is_similar_word_length(len(word1), len(word2), pm.word_length_similarity_constant):
+                #     continue
+                # else:
+                ngram_common = list(
+                    set(lexicon_word_ngrams[word1]).intersection(set(lexicon_word_ngrams[word2])))
+                n_total_overlap = len(ngram_common)
+                # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
+                word_1_index, word_2_index = lexicon.index(word1), lexicon.index(word2)
+                # print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
+                #       " ngram overlap ", ngram_common)
+                word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
+                    len(lexicon_word_ngrams[word1]))) * length_sim
+                word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
+                    len(lexicon_word_ngrams[word2]))) * length_sim
+                # print("inhib one way", word_overlap_matrix[word_1_index, word_2_index])
 
             if save:
                 if not matrix_filepath or not matrix_parameters_filepath:
                     matrix_filepath = '../data/processed/inhibition_matrix_previous.pkl'
                     matrix_parameters_filepath = '../data/processed/inhibition_matrix_parameters_previous.pkl'
-                    if not os.path.exists(matrix_filepath):
-                        os.makedirs(matrix_filepath)
-                    if not os.path.exists(matrix_parameters_filepath):
-                        os.makedirs(matrix_parameters_filepath)
+                    os.makedirs(os.path.dirname(matrix_filepath), exist_ok=True)
+                    os.makedirs(os.path.dirname(matrix_parameters_filepath), exist_ok=True)
 
                 with open(matrix_filepath, "wb") as f:
                     pickle.dump(word_inhibition_matrix, f)
@@ -284,7 +285,6 @@ class ReadingModel:
     def __init__(self,
                  texts:list[str]=None,
                  cycle_size:int = 25,
-                 stimulus_window = '-3,3',
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
                  word_inhibition:float = -1.5,
@@ -323,12 +323,13 @@ class ReadingModel:
                  predictability_values: dict = None,
                  frequency_filepath:str = '',
                  predictability_filepath:str = '',
-                 lexicon_filepath: str = '../data/processed/lexicon.pkl',
-                 matrix_filepath: str = '../data/processed/inhibition_matrix.pkl',
-                 matrix_parameters_filepath: str = '../data/processed/inhibition_parameters.pkl',
+                 lexicon_filepath: str = '',
+                 matrix_filepath: str = '',
+                 matrix_parameters_filepath: str = '',
+                 ngram_frequency_filepath: str = '',
                  include_predicted_without_frequencies: bool = False,
-                 save_lexicon: bool = True,
-                 save_word_inhibition: bool = True,
+                 save_lexicon: bool = False,
+                 save_word_inhibition: bool = False,
                  verbose: bool = True
                  ):
 
@@ -338,7 +339,6 @@ class ReadingModel:
         :param texts: list of texts to be used to generate the lexicon (and to be included in the frequency resource and predictability resource).
         If not given, the model attempts to generate lexicon with words from word frequency resource and/or word predictability resource.
         :param cycle_size: milliseconds that one model cycle is supposed to last (brain time, not model time).
-        :param stimulus_window: what the processing window of the model should be like, i.e. which positions around the fixated word the model should process in parallel.
         :param ngram_to_word_excitation: weight on ngram activation.
         :param ngram_to_word_inhibition: weight on ngram inhibition.
         :param word_inhibition: weight on inhibition word exert on its recognition competitors.
@@ -386,7 +386,6 @@ class ReadingModel:
 
         self.texts = texts
         self.cycle_size = cycle_size
-        self.stimulus_window = stimulus_window
         self.ngram_to_word_excitation = ngram_to_word_excitation
         self.ngram_to_word_inhibition = ngram_to_word_inhibition
         self.word_inhibition = word_inhibition
@@ -432,6 +431,15 @@ class ReadingModel:
         self.time = dt_string
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
+        self.processed_tokens = [token for token in self.processed_tokens if token != ''] # make sure no empty string
+
+        if self.ngram_gap == 0:
+            if not ngram_frequency_filepath:
+                if verbose: print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
+                logger.info("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
+            self.bigramFrame = get_ngram_frequency_from_file("../data/raw/UTF-8bigram_eng.csv", sep=';')
+        else:
+            self.bigramFrame = None
 
         # if use predictability but no predictability dict is provided, create predictability dict if texts are provided and if language and pred_source are supported
         if texts and use_predictability and not predictability_values:
@@ -446,7 +454,7 @@ class ReadingModel:
         self.frequency_values = frequency_values
 
         self.lexicon = add_lexicon(self.processed_tokens, lexicon_filepath, frequency_values, predictability_values, include_predicted_without_frequencies, save_lexicon, verbose)
-        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.ngram_gap, verbose)
+        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.bigramFrame, self.ngram_gap, verbose)
         self.recognition_thresholds = add_recognition_thresholds(self.lexicon, self.max_threshold, self.max_activity,
                                                                  self.freq_weight, frequency_values, self.use_threshold, verbose)
         self.word_inhibitions = add_word_inhibition_matrix(self.lexicon, self.lexicon_word_ngrams, matrix_filepath,
@@ -466,7 +474,7 @@ class ReadingModel:
         Preferably aligned with eye-tracking data which will be used to evaluate simulations.
         :param task_name: the task name.
         :param number_of_simulations: how many times the model should read the give text(s).
-        :param output_filepath: filepath to save the model output.
+        :param output_filepath: filepath to save the processed text.
         :param verbose: whether to show progress messages in the shell or not.
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
         :return: the simulation output of the model.
@@ -499,17 +507,19 @@ class ReadingModel:
             if not texts:
                 raise Exception('No texts to process. Please provide texts to process either in this function or when creating instance of ReadingModel.')
 
+        simulation_output = []
         for simulation_id in range(number_of_simulations):
-            simulation_output = []
             for text_id, text in enumerate(texts):
+                # if text_id in [1,2]:
                 text_tokens = [pre_process_string(token) for token in text.split(' ')]
+                text_tokens = [token for token in text_tokens if token != '']
                 text_output = sequence_read(self,
                                             task,
                                             text_tokens,
                                             text_id,
                                             verbose=verbose)
                 simulation_output.append(text_output)
-                # if filepath is given to save output, save output as the model finishes reading a text
+                # # if filepath is given to save output, save output as the model finishes reading a text
                 if output_filepath:
                     write_out_simulation_data(text_output, output_filepath, simulation_id = simulation_id, text_id = text_id)
             # save output of each simulation

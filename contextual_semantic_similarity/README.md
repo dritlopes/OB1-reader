@@ -1,11 +1,11 @@
-# Saliency map for saccade planning
-This branch of the OB1-reader repository contains the code to compute a saliency map proposed, and run the analysis reported, in the following paper:
+# Predicting saccade targeting in reading
+This branch of the OB1-reader repository contains the code to train and test a model for predicting saccade targeting in reading, proposed in the following paper:
 
-* Lopes Rego, A. T., Meeter, M., & Snell, J. (2025). An information-theoretic mechanism to explain oculomotor behaviour in reading. _In prep._
+* Lopes Rego, A. T., Snell, J., & Meeter, M. (2025). What determines where readers fixate next? Leveraging NLP to investigate human cognition. _In prep._
 
 Abstract:
 
-"During reading, readers perform forward and backward eye movements through text, called saccades. Although such movements are intuitive to readers, the mechanisms underlying such behaviour is not yet fully known, particularly regarding the role of higher-order linguistic processes in guiding reading behaviour. One possibility is that readers tend to target the closest most informative word in the surrounding context when moving through text. In this study, we investigate the influence of semantics on saccade targeting, i.e., determining where to move our eyes next. Using contextualized embeddings from GPT-2 small and large, we measure pairwise semantic similarity between the fixated word and its surrounding words within a context window. We then analyse to what extent contextualized semantic similarity predicts the next fixation target, beyond word length, frequency and surprisal. In addition, we explore the mechanism through which this relation may take place by performing simulations with the OB1-reader, a model of eye-movement control in reading. For this end, we develop a saliency map based on semantic similarity and positional distance between the fixated word and the surrounding word, whereby the closer and less similar to the fixated word, the more likely the surrounding word is to attract attention and thus be the next fixation target. Furthermore, saliency of words in upcoming positions is also modulated by predictability and orthographic input from the parafovea to account for the uncertainty about the identity of upcoming, not yet recognized words. "
+"During reading, readers perform forward and backward eye movements through text, called saccades. Although this behaviour is intuitive to readers, the mechanisms underlying it are not yet fully known, particularly regarding the role of higher-order linguistic processes in guiding eye-movement behaviour in naturalistic reading. One possibility is that readers tend to target the closest and most informative word in the surrounding context when moving through text. Current models of eye movement simulation in reading either limit the role of high-order linguistic information or lack explainability and cognitive plausibility. In this study, we investigate the influence of linguistic information on saccade targeting, i.e. determining where to move our eyes next, by predicting the location of the next fixation based on a limited processing window, more similarly to the amount of information humans readers can presumably process in parallel within the visual field at each fixation. Our preliminary results suggest that, while word length and frequency are important factors for determining the target of forward saccades, the contextualized meaning of the previous sequence, as well as whether the context word had been fixated before and the distance of the previous saccade, are important factors for predicting backward saccades."
 
 ### How to run the code
 
@@ -24,14 +24,28 @@ Abstract:
     * File with eye-tracking data with surprisal values (and entropy) added as a column.
 
 
-3. Run ```compute_semantic_similarity.py``` to obtain semantic similarity values. In the main function, you should specify the corpus name, the model and layer(s) to compute representations, and the type of semantic similarity (with previous context or within a context window). Two files are needed here: the eye-tracking file outputted by compute_surprisal.py, and the file with each word as a row outputted by process_corpus.py. The script outputs the following files:
-    * File with each word as a row, with semantic similarity added as a column, if similarity with previous context. If similarity with context window, each row has the pairwise similarity with each word and each context word within defined context window.
-    * File with eye-tracking data and semantic similarity values.
+3. Run ```compute_embeddings.py``` to obtain contextualized embeddings. In the main function, you should specify the corpus name, the model and layer(s) to compute representations. Two files are needed here: the eye-tracking file outputted by compute_surprisal.py, and the file with each word as a row outputted by process_corpus.py. The script outputs the following files:
+    * A file for each corpus text containing the pytorch tensor embeddings for each word position in the text.
+    * A file containing the map between word position in the corpus text and token position in the language model input for further alignment.
 
 
-4. Run ```compute_saliency.py``` to obtain predicted next fixation position for each fixated word by each participant, based on saliency mapping. In the main function, specify the name of the corpus, and the model and layer used to compute surprisal and semantic similarity. Two files are needed here: the eye-tracking file outputted by compute_semantic_similarity.py, and the file with each word as a row outputted by process_corpus.py. The script outputs a file with each fixated word as a row, as well as the position of the next fixation, saliency type, and predicted position of next fixation according to saliency map.
+4. Run ```train_classifier.py``` to train and test classifier, and to run feature ablation. In the main function, provide the following arguments:
+   * ```eye_data_filepath``` = the filepath to the corpus data (output in step 1 - and 2 if using surprisal values); We provide this file for the MECO corpus under 'data/processed/meco/gpt2' for convenience.
+   * ```word_data_filepath``` = the filepath to the words data (output in step 1). We provide this file for the MECO corpus under 'data/processed/meco' for convenience.
+   * ```opt_dir``` = the path to the directory where to store the output of the training and testing.
+   * ```compute_tensors``` = whether to compute tensors which form the input vectors. They may be computed and stored already, in which case set this boolean to False.
+   * ```pre_process``` = whether to pre-process the corpus data file, e.g. z-normalize the variables. If data is already pre_processed (we provide the pre-processed file whose name finishes with "cleaned"), set this boolean to False.
+   * ```norm_method``` = normalization method. Either 'z-score' or 'max-min'.
+   * ```baselines``` = define which baselines to compare the trained model with (default = 'next_word,random')
+   * ```features``` = which features to use in the input. Full model is 'length,surprisal,frequency,has_been_fixated,embedding,previous_sacc_distance,previous_fix_duration'
+   * ```vectors_dir``` = directory in which to save the computed vectors.
+   * ```n_context_words``` = how many word positions to consider for targeting. Default is 7.
+   * ```params_dataloader``` = the parameters for the Pytorch DataLoader. Default is batch_size = 32, shuffle = True, and num_workers = 6.
+   * ```params_classifier``` = the parameters for the model Classifier. Default is hidden_nodes = 128, output_nodes = n_context_words, and learning_rate = .0001.
+   * ```epochs``` = the number of epochs for training. Default is 10.
+   * ```seed``` = the seed for reproducibility of random steps. Default is 42.
+   * ```do_training``` = set to True to train model.
+   * ```do_feature_ablation``` = set to True to run feature ablation.
 
 
-5. Run ```analysis.py``` to evaluate accuracy and RMSE of predicted next fixation position according to saliency map. 
-6. Run ```stats_analysis``` to reproduce correlational analysis of semantic similarity and eye movement variables. 
-7. Run ```run.sh``` to run steps 1 to 5 on the command line if using gpu.
+5. Run ```run.sh``` to train classifier on the command line if using gpu.

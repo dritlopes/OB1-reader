@@ -19,7 +19,7 @@ class TaskAttributes:
     language: str = 'en'
     n_trials: int = 0,
     stim_cycles: int = 0,
-    blank_screen_type: str = '',
+    blank_screen_type: str = 'blank',
     blank_screen_cycles_begin: int = 0,
     blank_screen_cycles_end: int = 0,
     is_priming_task: bool = False,

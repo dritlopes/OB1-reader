@@ -9,6 +9,8 @@ from transformers import LlamaForCausalLM, LlamaTokenizer
 import torch
 from model_components import semantic_processing
 from collections import defaultdict
+from typing import Literal
+import codecs
 
 def pre_process_string(string, remove_punctuation=True, all_lowercase=True, strip_spaces=True):
 
@@ -360,13 +362,11 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
 
         # if this is not the first text of first simulation, read in output of previous texts/simulations and update it with new data
         if os.path.exists(outfile_sim_data):
-            simulation_df = pd.read_csv(outfile_sim_data)
-            pd.concat([simulation_df, simulation_results_df])
+            simulation_df = pd.read_csv(outfile_sim_data, sep='\t')
+            simulation_results_df = pd.concat([simulation_df, simulation_results_df],ignore_index=True)
 
         # save out output
-        dir_path = os.path.dirname(outfile_sim_data)
-        if dir_path and not os.path.exists(dir_path):
-            os.makedirs(dir_path)
+        os.makedirs(os.path.dirname(outfile_sim_data), exist_ok=True)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
     # if simulation id not give, save output above simulation level (save all outputs at once, once all simulations in all input texts are done)
@@ -389,3 +389,17 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
         if dir_path and not os.path.exists(dir_path):
             os.makedirs(dir_path)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
+
+def get_ngram_frequency_from_file(filepath, sep='\t'):
+
+    # check if filepath exists
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File {filepath} does not exist trying to get ngram frequencies from file.")
+
+    else:
+        data = pd.read_csv(filepath, sep=sep)
+
+    # assert that column 'bigram' and column 'freq' exist
+    assert 'bigram' in data.columns and 'freq' in data.columns, f"Columns 'bigram' and 'freq' must exist in the file {filepath}."
+
+    return data

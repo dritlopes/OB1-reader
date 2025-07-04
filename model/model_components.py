@@ -4,28 +4,30 @@ import torch
 from torch import nn
 import math
 import warnings
-from reading_helper_functions import string_to_open_ngrams, cal_ngram_exc_input, is_similar_word_length, \
+import pandas as pd
+from reading_helper_functions import string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
     get_midword_position_for_surrounding_word, calc_word_attention_right, calc_saccade_error, define_slot_matching_order, \
     find_word_edges, sample_from_norm_distribution
 
 logger = logging.getLogger(__name__)
 
-def compute_stimulus(fixation:int, tokens:list[str], stimulus_window:str)->(str,list,int):
+def compute_stimulus(fixation:int, tokens:list[str])->(str,list,int):
 
     """
     Given fixation position in text and the text tokens, find the stimulus for a given fixation.
+    The stimulus is normally made of 5 words: n-2 to n+2 (n being the fixated word).
 
     :param fixation: which token from input text the fixation is located at.
     :param tokens: the text tokens.
-    :param stimulus_window: which positions around the fixated word the model should process in parallel.
 
     :return: the stimulus, the position of each word in the stimulus in relation to the text,
     and the position of the fixated word in relation to the stimulus.
     """
-
-    stimulus_window = stimulus_window.split(',')
-    start_window = fixation + int(stimulus_window[0])
-    end_window = fixation + int(stimulus_window[1])
+    start_window = fixation - 1
+    end_window = fixation + 3
+    # assuming stimulus default is n-2 to n+2
+    # start_window = fixation - 2
+    # end_window = fixation + 2
     # only add position if after text begin and below text length
     stimulus_position = [i for i in range(start_window, end_window+1) if i >= 0 and i < len(tokens)]
     stimulus = ' '.join([tokens[i] for i in stimulus_position])
@@ -65,6 +67,67 @@ def compute_eye_position(stimulus:str, fixated_position_stimulus:int, eye_positi
 
     return int(np.round(eye_position))
 
+# def compute_ngram_activity(stimulus:str,
+#                            eye_position:int,
+#                            attention_position:int,
+#                            attend_width:float,
+#                            let_per_deg:float,
+#                            attention_skew:float,
+#                            gap:int,
+#                            recognition_in_stimulus:list[int],
+#                            tokens:list,
+#                            recognized_word_at_cycle:np.ndarray[int],
+#                            n_cycles:int)->dict:
+#
+#     """
+#     Initialize word activity based on ngram excitatory input.
+#
+#     :param stimulus: the tokens the model is processing in parallel.
+#     :param eye_position: the index of the character the eyes are fixating at in the stimulus.
+#     :param attention_position: the index of the character where the focus of attention is located in the stimulus.
+#     :param attend_width: how long the attention window should be when processing the input stimulus.
+#     :param let_per_deg: used to calculate visual acuity, which is then used to compute attention.
+#     :param attention_skew: used in the formula to compute attention. How skewed attention should be to the right of the fixation point. 1 equals symmetrical distribution.
+#     :param gap: the number of characters between two characters allowed to still form a bi-gram.
+#     :param recognition_in_stimulus: list of word indices that have been recognized in stimulus.
+#     :param tokens: the input text tokens.
+#     :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
+#     :param n_cycles: how many processing cycles have already occurred in current fixation.
+#
+#     :return: dict with ngram as keys and excitatory input as value.
+#     """
+#
+#     unit_activations = {}
+#     # define the word ngrams, its weights and their location within the word
+#     all_ngrams, all_weights, all_locations = string_to_ngrams(stimulus, gap)
+#     fix_ngrams = []
+#
+#     if len(recognition_in_stimulus) > 0 and len(tokens) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
+#         for i in recognition_in_stimulus:
+#             # AL: a hack to avoid recognized words to be too active and be matched to subsequent positions too!
+#             # after recognition, 200ms block on activation (= 8 act cycles)
+#             if n_cycles - recognized_word_at_cycle[i] <= 8:
+#                 ngrams, weights, locations = string_to_ngrams(tokens[i], gap)
+#                 fix_ngrams.extend(ngrams)
+#                 # print(tokens[i], n_cycles, recognition_cycle[i], ngrams)
+#
+#     for ngram, weight, location in zip(all_ngrams, all_weights, all_locations):
+#         # remove activation of ngrams from recognized words for the next 8 act cycles after recognition
+#         if ngram in fix_ngrams:
+#             activation = 0.0
+#         else:
+#             activation = cal_ngram_exc_input(location, weight, eye_position, attention_position,
+#                                              attend_width, let_per_deg, attention_skew)
+#         # AL: a ngram that appears more than once in the simulus
+#         # will have the activation from the ngram in the position with highest activation
+#         if ngram in unit_activations.keys():
+#             unit_activations[ngram] = max(unit_activations[ngram], activation)
+#         else:
+#             unit_activations[ngram] = activation
+#     # print(unit_activations)
+#
+#     return unit_activations
+
 def compute_ngram_activity(stimulus:str,
                            eye_position:int,
                            attention_position:int,
@@ -75,7 +138,8 @@ def compute_ngram_activity(stimulus:str,
                            recognition_in_stimulus:list[int],
                            tokens:list,
                            recognized_word_at_cycle:np.ndarray[int],
-                           n_cycles:int)->dict:
+                           n_cycles:int,
+                           bigramFrame:pd.DataFrame=None)->dict:
 
     """
     Initialize word activity based on ngram excitatory input.
@@ -97,7 +161,9 @@ def compute_ngram_activity(stimulus:str,
 
     unit_activations = {}
     # define the word ngrams, its weights and their location within the word
-    all_ngrams, all_weights, all_locations = string_to_open_ngrams(stimulus, gap)
+    if gap==0 and bigramFrame is None:
+        raise NotImplementedError("Must specify bigramFrame when using closed ngrams!")
+    all_ngrams, all_weights, all_locations = string_to_ngrams(stimulus, bigramFrame, gap)
     fix_ngrams = []
 
     if len(recognition_in_stimulus) > 0 and len(tokens) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
@@ -105,7 +171,7 @@ def compute_ngram_activity(stimulus:str,
             # AL: a hack to avoid recognized words to be too active and be matched to subsequent positions too!
             # after recognition, 200ms block on activation (= 8 act cycles)
             if n_cycles - recognized_word_at_cycle[i] <= 8:
-                ngrams, weights, locations = string_to_open_ngrams(tokens[i], gap)
+                ngrams, weights, locations = string_to_ngrams(stimulus, bigramFrame, gap)
                 fix_ngrams.extend(ngrams)
                 # print(tokens[i], n_cycles, recognition_cycle[i], ngrams)
 
@@ -136,7 +202,8 @@ def compute_words_input(stimulus:str,
                         recognition_in_stimulus:list[int],
                         tokens:list[str],
                         recognized_word_at_cycle:np.ndarray[int],
-                        n_cycles:int)->(np.ndarray,list,int,int):
+                        n_cycles:int,
+                        bigramFrame:pd.DataFrame=None)->(np.ndarray,list,int,int):
 
     """
     Calculate activity for each word in the lexicon given the excitatory input from all ngrams in the stimulus.
@@ -166,7 +233,7 @@ def compute_words_input(stimulus:str,
     unit_activations = compute_ngram_activity(stimulus, eye_position,
                                               attention_position, attend_width, pm.let_per_deg,
                                               pm.attention_skew, pm.ngram_gap,
-                                              recognition_in_stimulus, tokens, recognized_word_at_cycle, n_cycles)
+                                              recognition_in_stimulus, tokens, recognized_word_at_cycle, n_cycles, bigramFrame)
     # print(f'Activated ngrams: {unit_activations}')
     total_ngram_activity = sum(unit_activations.values())
     n_ngrams = len(unit_activations.keys())
@@ -424,43 +491,46 @@ def activate_predicted_upcoming_word(position:int|str,
         if predicted['target'] != target_word and verbose:
             warnings.warn(f'Target word in predictability map "{predicted["target"]}" not the same as target word in model stimuli "{target_word}", position {position}')
 
-        for token, pred in predicted['predictions'].items():
+        pred_previous_word = 0
+        # determine the predictability of the previous text word to weight predictability of position
+        if recognized_word_at_position[position - 1]:
+            pred_previous_word = 1
+        # if previous word has not been recognized yet
+        else:
+            # if position not the first word in the text and in predictability map
+            if position - 1 > 0 and str(position - 1) in pred_dict.keys():
+                # if previous text word is among the predictions
+                if pred_dict[str(position - 1)]['target'] in pred_dict[str(position - 1)]['predictions'].keys():
+                    # and previous word to that word has been recognized
+                    if position - 2 >= 0 and recognized_word_at_position[position - 2]:
+                        # weight pred by the pred value of the previous word that is > 0 and < 1
+                        pred_previous_word = pred_dict[str(position - 1)]['predictions'][
+                            pred_dict[str(position - 1)]['target']]
+                        # pred_previous_word = entropy[position-1]
 
-            if token in lexicon:
-                i = lexicon.index(token)
-                pred_previous_word = 0
-                # determine the predictability of the previous text word to weight predictability of position
-                if recognized_word_at_position[position - 1]:
-                    pred_previous_word = 1
-                # if previous word has not been recognized yet
-                else:
-                    # if position not the first word in the text and in predictability map
-                    if position - 1 > 0 and str(position - 1) in pred_dict.keys():
-                        # if previous text word is among the predictions
-                        if pred_dict[str(position-1)]['target'] in pred_dict[str(position-1)]['predictions'].keys():
-                            # and previous word to that word has been recognized
-                            if position - 2 >= 0 and recognized_word_at_position[position - 2]:
-                                # weight pred by the pred value of the previous word that is > 0 and < 1
-                                pred_previous_word = pred_dict[str(position-1)]['predictions'][pred_dict[str(position-1)]['target']]
-                                # pred_previous_word = entropy[position-1]
-
-                # weight predictability with predictability (certainty) of previous text word
-                if pred_previous_word:
+        # weight predictability with predictability (certainty) of previous text word
+        if pred_previous_word:
+            for token, pred in predicted['predictions'].items():
+                if token in lexicon:
+                    i = lexicon.index(token)
                     # pre_act = (pred * pred_weight) / pred_previous_word
                     pre_act = (pred * pred_previous_word * pred_weight)
                     lexicon_word_activity[i] += pre_act
-
                     if position == fixation + 1 and pre_act > 0:
                         pred_bool = True
-
                     if verbose:
                         print(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
                     logger.info(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
-
                 else:
-                    logger.info(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+                    logger.info(
+                        f'Predicted word "{token}" at position of text word "{target_word}" not in model lexicon')
                     if verbose:
-                        print(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+                        print(
+                            f'Predicted word "{token}" at position of text word "{target_word}" not in model lexicon')
+        else:
+            logger.info(f'Since no predictability of previous word, no word was pre-activated at position of text word "{target_word}"')
+            if verbose:
+                print(f'Since no predictability of previous word, no word was pre-activated at position of text word "{target_word}"')
     else:
         if verbose:
             print(f'Position {position} not found in predictability map')
@@ -575,55 +645,6 @@ def compute_next_attention_position(reader_output:list,
     logger.info(f'attentpos {attention_position}')
 
     return attention_position
-
-# def compute_next_attention_position(reader_output:list,
-#                                     tokens:list[str],
-#                                     fixation:int,
-#                                     word_edges:dict[int,tuple[int,int]],
-#                                     fixated_position_in_stimulus:int,
-#                                     regression_flag:np.ndarray[bool],
-#                                     recognized_word_at_position:np.ndarray[str],
-#                                     lexicon_word_activity:np.ndarray[float],
-#                                     eye_position:int,
-#                                     fixation_counter:int,
-#                                     attention_position:int,
-#                                     fix_lexicon_index:int,
-#                                     pm,
-#                                     verbose:bool)->float:
-#
-#     """
-#     Define where attention should be moved next based on recognition of words in current stimulus and the visual
-#     salience of the words to the right of fixation.
-#
-#     :param reader_output: list of fixation outputs from model.
-#     :param tokens: list of tokens in text.
-#     :param fixation: which token from input text the fixation is located at.
-#     :param word_edges: dictionary storing word edges in stimulus.
-#     :param fixated_position_in_stimulus: the position of the fixated word in relation to the stimulus
-#     :param regression_flag: history of regressions, set to true at a certain position in the text when a regression is performed to that word.
-#     :param recognized_word_at_position: array storing which word received the highest activation in each text position.
-#     :param lexicon_word_activity: word activity for words in lexicon.
-#     :param eye_position: eye position in stimulus (in number of characters).
-#     :param fixation_counter: how many fixations have been performed by this point in processing the current text.
-#     :param attention_position: attention position in stimulus (in number of characters).
-#     :param fix_lexicon_index: index of fixated word in lexicon.
-#     :param pm: an instance of ReadingModel.
-#     :param verbose: whether to print progress.
-#
-#
-#     :return: the next attention position as the index of the letter in the word programmed to be fixated next (in relation to total stimulus characters).
-#     """
-#
-#     # Define target of next fixation relative to fixated word n (i.e. 0=next fix on word n, -1=fix on n-1, etc). Default is 1 (= to word n+1)
-#     next_fixation = 1
-#
-#
-#
-#     if verbose:
-#         print(f'attentpos {attention_position}')
-#     logger.info(f'attentpos {attention_position}')
-#
-#     return attention_position
 
 def compute_next_eye_position(pm,
                               attention_position:int,
@@ -857,7 +878,7 @@ class FixationProcessor:
         tokens = self.reader.tokens
         # make sure that fixation does not go over the end of the text. Needed for continuous reading
         self.fixation = min(self.fixation, len(self.reader.tokens) - 1)
-        self.stimulus, self.stimulus_position, self.fixated_position_in_stimulus = compute_stimulus(self.fixation, tokens, self.reader.model.stimulus_window)
+        self.stimulus, self.stimulus_position, self.fixated_position_in_stimulus = compute_stimulus(self.fixation, tokens)
         self.eye_position = compute_eye_position(self.stimulus, self.fixated_position_in_stimulus, self.eye_position)
         # define index of letters at the words edges. Used in processing cycle loop.
         self.word_edges = find_word_edges(self.stimulus)
@@ -921,7 +942,8 @@ class FixationProcessor:
                                                                                      self.recognition_in_stimulus,
                                                                                      self.reader.tokens,
                                                                                      self.recognized_word_at_cycle,
-                                                                                     self.n_cycles)
+                                                                                     self.n_cycles,
+                                                                                     self.reader.model.bigramFrame)
 
         # Counter n_cycles_since_attent_shift is 0 until attention shift (saccade program initiation),
         # then starts counting to 5 (because a saccade program takes 5 cycles, or 125ms.)
@@ -944,7 +966,8 @@ class FixationProcessor:
                                                                                              self.recognition_in_stimulus,
                                                                                              self.reader.tokens,
                                                                                              self.recognized_word_at_cycle,
-                                                                                             self.n_cycles)
+                                                                                             self.n_cycles,
+                                                                                             self.reader.model.bigramFrame)
 
             # ---------------------- Update word activity per cycle ---------------------
             # Update word act with word inhibition (input remains same, so does not have to be updated)
@@ -1035,7 +1058,8 @@ class FixationProcessor:
                                                                                                      self.recognition_in_stimulus,
                                                                                                      self.reader.tokens,
                                                                                                      self.recognized_word_at_cycle,
-                                                                                                     self.n_cycles)
+                                                                                                     self.n_cycles,
+                                                                                                     self.reader.model.bigramFrame)
                         self.attention_position = np.round(self.attention_position)
 
                         if verbose: print(

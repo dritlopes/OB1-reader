@@ -21,50 +21,131 @@ def get_stimulus_edge_positions(stimulus:str)->list[int]:
 
     return stimulus_word_edge_positions
 
-def string_to_open_ngrams(string:str, gap:int)->(list[str],list[float],list[list[int]]):
+# def string_to_open_ngrams(string:str, gap:int)->(list[str],list[float],list[list[int]]):
+#
+#     """
+#     Determine the ngrams the word(s) in the model input activates, their activation weights and positions in the string.
+#
+#     :param string: word(s) in model input.
+#     :param gap: the number of characters between two characters allowed to still form a bi-gram.
+#     :return: the ngrams the word activates, the weights of ngram activation for each ngram, and where they are located in the word.
+#     """
+#
+#     all_ngrams, all_weights, all_locations = [], [], []
+#
+#     # AL: make sure string contains one space before and after for correctly finding word edges
+#     string = " " + string + " "
+#     edge_locations = get_stimulus_edge_positions(string)
+#     string = string.strip()
+#
+#     for position, letter in enumerate(string):
+#         weight = 0.5
+#         # AL: to avoid ngrams made of spaces
+#         if letter != ' ':
+#             if position in edge_locations:
+#                 weight = 1.
+#                 # AL: increases weigth of unigrams with no crowding (one-letter words, e.g. "a")
+#                 if 0 < position < len(string) - 1:
+#                     if string[position-1] == ' ' and string[position+1] == ' ':
+#                         weight = 3
+#                 # AL: include monogram if at word edge
+#                 all_ngrams.append(letter)
+#                 all_weights.append(weight)
+#                 all_locations.append([position])
+#
+#             # AL: find bigrams
+#             for i in range(1, gap+1):
+#                 # AL: make sure second letter of bigram does not cross the stimulus string nor the word
+#                 if position+i >= len(string) or string[position+i] == ' ':
+#                     break
+#                 # Check if second letter in bigram is edge
+#                 if position+i in edge_locations:
+#                     weight = weight * 2
+#                 bigram = letter+string[position+i]
+#                 all_ngrams.append(bigram)
+#                 all_locations.append([position, position+i])
+#                 all_weights.append(weight)
+#
+#     return all_ngrams, all_weights, all_locations
 
+def string_to_ngrams(string, bigramFrame=None, gap=0):
     """
-    Determine the ngrams the word(s) in the model input activates, their activation weights and positions in the string.
+    Determine the ngrams the word(s) in the model input activates, their activation weights, and positions in the string.
 
     :param string: word(s) in model input.
+    :param bigramFrame: DataFrame containing bigram frequencies (required for closed ngrams).
     :param gap: the number of characters between two characters allowed to still form a bi-gram.
+                When gap=0, closed ngrams logic is used; otherwise, open ngrams logic is applied.
     :return: the ngrams the word activates, the weights of ngram activation for each ngram, and where they are located in the word.
     """
-
     all_ngrams, all_weights, all_locations = [], [], []
 
-    # AL: make sure string contains one space before and after for correctly finding word edges
-    string = " " + string + " "
-    edge_locations = get_stimulus_edge_positions(string)
-    string = string.strip()
+    if gap==0 and bigramFrame is None:
+        raise ValueError("bigramFrame must be provided for closed ngrams (gap=0)")
+
+    # Preprocess string
+    if gap == 0:
+        string = string.strip()
+    else:
+        string = " " + string + " "
+        edge_locations = get_stimulus_edge_positions(string)
+        string = string.strip()
 
     for position, letter in enumerate(string):
-        weight = 0.5
-        # AL: to avoid ngrams made of spaces
-        if letter != ' ':
-            if position in edge_locations:
-                weight = 1.
-                # AL: increases weigth of unigrams with no crowding (one-letter words, e.g. "a")
-                if 0 < position < len(string) - 1:
-                    if string[position-1] == ' ' and string[position+1] == ' ':
-                        weight = 3
-                # AL: include monogram if at word edge
-                all_ngrams.append(letter)
+        if letter == ' ':
+            continue
+
+        # Determine weight for unigrams
+        weight = 1.0 if gap == 0 else 0.5
+        if gap > 0 and position in edge_locations:
+            weight = 1.0
+            if 0 < position < len(string) - 1 and string[position - 1] == ' ' and string[position + 1] == ' ':
+                weight = 3.0
+
+        # Add unigrams
+        all_ngrams.append(letter)
+        all_weights.append(weight)
+        all_locations.append([position])
+
+        # Add edge-specific bigrams for closed ngrams
+        if gap == 0:
+            if position == 0 or (position > 0 and string[position - 1] == " "):  # Start of word
+                all_ngrams.append(' ' + letter)
+                all_weights.append(weight)
+                all_locations.append([position])
+            if position == len(string) - 1 or (position < len(string) - 1 and string[position + 1] == " "):  # End of word
+                all_ngrams.append(letter + ' ')
                 all_weights.append(weight)
                 all_locations.append([position])
 
-            # AL: find bigrams
-            for i in range(1, gap+1):
-                # AL: make sure second letter of bigram does not cross the stimulus string nor the word
-                if position+i >= len(string) or string[position+i] == ' ':
-                    break
-                # Check if second letter in bigram is edge
-                if position+i in edge_locations:
-                    weight = weight * 2
-                bigram = letter+string[position+i]
+        # Add bigrams
+        for i in range(1, gap + 1):
+            if position + i >= len(string) or string[position + i] == ' ':
+                break
+
+            bigram = letter + string[position + i]
+            bigram_weight = weight
+
+            if gap == 0:  # Closed ngrams
+                if i > 1:
+                    bigram_weight = 0.5
+                if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
+                    bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
+                    if gap == 1 and (position == 0 or (position > 0 and string[position - 1] == " ")):
+                        bigram_weight *= 2 * bigrFreq  # Extra weight for start of word
+                    elif position == len(string) - 2 or (position < len(string) - 2 and string[position + 2] == " "):
+                        bigram_weight *= 2 * bigrFreq  # Extra weight for end of word
+                    else:
+                        bigram_weight *= bigrFreq
+                    all_ngrams.append(bigram)
+                    all_weights.append(bigram_weight)
+                    all_locations.append([position, position + i])
+            else:  # Open ngrams
+                if position + i in edge_locations:
+                    bigram_weight *= 2
                 all_ngrams.append(bigram)
-                all_locations.append([position, position+i])
-                all_weights.append(weight)
+                all_weights.append(bigram_weight)
+                all_locations.append([position, position + i])
 
     return all_ngrams, all_weights, all_locations
 
