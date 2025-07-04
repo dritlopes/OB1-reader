@@ -30,8 +30,8 @@ Abstract:
 
 
 4. Run ```train_classifier.py``` to train and test classifier, and to run feature ablation. In the main function, provide the following arguments:
-   * ```eye_data_filepath``` = the filepath to the corpus data (output in step 1 - and 2 if using surprisal values); We provide this file for the MECO corpus under 'data/processed/meco/gpt2' for convenience.
-   * ```word_data_filepath``` = the filepath to the words data (output in step 1). We provide this file for the MECO corpus under 'data/processed/meco' for convenience.
+   * ```eye_data_filepath``` = the filepath to the corpus data (output in step 1 - and 2 if using surprisal values); Please email us if you'd like have this file instead of running the previous steps.
+   * ```word_data_filepath``` = the filepath to the words data (output in step 1). Please email us if you'd like have this file instead of running the previous steps.
    * ```opt_dir``` = the path to the directory where to store the output of the training and testing.
    * ```compute_tensors``` = whether to compute tensors which form the input vectors. They may be computed and stored already, in which case set this boolean to False.
    * ```pre_process``` = whether to pre-process the corpus data file, e.g. z-normalize the variables. If data is already pre_processed (we provide the pre-processed file whose name finishes with "cleaned"), set this boolean to False.
@@ -49,3 +49,6 @@ Abstract:
 
 
 5. Run ```run.sh``` to train classifier on the command line if using gpu.
+
+
+Please contact a.t.lopesrego@vu.nl if you have any questions about this code.
