@@ -51,4 +51,4 @@ Abstract:
 5. Run ```run.sh``` to train classifier on the command line if using gpu.
 
 
-Please contact a.t.lopesrego@vu.nl if you have any questions about this code.
+Please contact a.t.lopesrego@vu.nl if you have any questions about this code
