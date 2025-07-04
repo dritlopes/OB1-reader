@@ -1,7 +1,9 @@
 /.idea
-/contextual_semantic_similarity/data/processed/*
-!/contextual_semantic_similarity/data/processed/meco/gtp2/full_gpt2_[1]_meco_window_cleaned.csv
-!/data/processed/meco/words_en_df.csv
 /contextual_semantic_similarity/data/raw/
 /contextual_semantic_similarity/data/model_output/
 /contextual_semantic_similarity/data/analysed/
+/contextual_semantic_similarity/data/processed/*
+!contextual_semantic_similarity/data/processed/meco/
+!contextual_semantic_similarity/data/processed/meco/gtp2/
+!/contextual_semantic_similarity/data/processed/meco/gtp2/full_gpt2_[1]_meco_window_cleaned.csv
+!/contextual_semantic_similarity/data/processed/meco/words_en_df.csv
