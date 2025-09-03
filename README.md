@@ -9,7 +9,9 @@ Check out some of the work done as part of this PhD project:
 
 * *Lopes Rego, A. T., Snell, J., & Meeter, M. (2024). Language models outperform cloze predictability in a cognitive model of reading. PLOS Computational Biology, 20(9).* To reproduce experiments from paper: https://github.com/dritlopes/language_models_outperform_cloze_predictability_in_a_cognitive_model_of_reading
 
-* *Lopes Rego, A. T., Nogueira, A., & Meeter, M. (2025). Language models capture where readers look back to in a text. (in prep.)* To reproduce experiments from paper: https://github.com/dritlopes/modeling_regressions_with_surprisal_and_saliency
+* *Lopes Rego, A. T., Nogueira, A., J. Snell, & Meeter, M. Language models capture where readers look back to in a text. _Under review_. * To reproduce experiments from paper: https://github.com/dritlopes/modeling_regressions_with_surprisal_and_saliency
+  
+* *Lopes Rego, J. Snell, & Meeter, M. (2025). _What determines where readers fixate next? Leveraging NLP to investigate human cognition_. _Proceedings of the First Workshop on Gaze Data and Natural Language Processing (in press)_. * To reproduce experiments from paper: https://github.com/dritlopes/OB1-reader/tree/contextual_semantic_similarity
 
 ## How to run the code
 
