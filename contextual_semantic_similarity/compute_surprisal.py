@@ -50,34 +50,34 @@ def calculate_surprisal_values(df: pd.DataFrame,
 
             else:
                 next_word = ' ' + next_word
-                # next_word_clean = next_word.strip(string.punctuation)
-                # tokenize previous context
-                encoded_input = tokenizer(previous_context, return_tensors='pt').to(device)
-                # tokenize word
+                next_word = next_word.strip(string.punctuation)
+                # tokenize next word
                 next_word_id = tokenizer(next_word, return_tensors='pt')["input_ids"][0].to(device)
-                model.to(device)
-                # turn off dropout layers
-                model.eval()
-                output = model(**encoded_input)
-                # logits are scores from output layer of shape (batch_size, sequence_length, vocab_size)
-                logits = output.logits[:, -1, :]
-                # convert raw scores into probabilities (between 0 and 1)
-                probabilities = nn.functional.softmax(logits, dim=1)  # softmax transforms the values from logits into percentages
-                # compute entropy of probability distributions
-                entropy_score = entropy(probabilities[0].cpu().detach().numpy())
-                entropy_values.append(entropy_score)
-                # take surprisal of word in the text (summing surprisal for multi-token words)
-                token_surprisal = []
-                for token_id in next_word_id:
-                    probability = probabilities[0, token_id]
-                    probability = probability.cpu().detach().numpy()
-                    # convert probability into surprisal
-                    surprisal = -np.log2(probability)
-                    token_surprisal.append(surprisal)
-                surprisal = np.sum(token_surprisal)
-                surprisal_values.append(surprisal)
-                # increase context for next surprisal
-                previous_context = previous_context + next_word
+
+                # to deal with multi-token words
+                total_word_surprisal = 0.0
+                for i, token_id in enumerate(next_word_id):
+                    # tokenize previous context
+                    encoded_input = tokenizer(previous_context, return_tensors='pt').to(device)
+                    # turn off dropout layers
+                    model.eval()
+                    output = model(**encoded_input)
+                    # logits are scores from output layer of shape (batch_size, sequence_length, vocab_size)
+                    logits = output.logits[:, -1, :]
+                    # convert raw scores into probabilities (between 0 and 1)
+                    probabilities = nn.functional.softmax(logits,
+                                                          dim=1)  # softmax transforms the values from logits into percentages
+                    next_token_prob = probabilities[0, token_id]
+                    next_token_prob = next_token_prob.cpu().detach().numpy()
+                    surprisal = -np.log2(next_token_prob)
+                    total_word_surprisal += surprisal
+                    previous_context += tokenizer.decode([token_id])
+                    if i == 0:
+                        # compute entropy of probability distributions
+                        entropy_score = entropy(probabilities[0].cpu().detach().numpy())
+                        entropy_values.append(entropy_score)
+                surprisal_values.append(total_word_surprisal)
+
                 # check which words in the corpus are multi-tokens in the model
                 if len(next_word_id) > 1:
                     corpus_tokens.append(next_word)

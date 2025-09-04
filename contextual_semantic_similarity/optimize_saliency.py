@@ -10,10 +10,10 @@ from collections import defaultdict
 from itertools import combinations
 from scipy.stats import ttest_rel
 
-from contextual_semantic_similarity.visualizations import display_prediction_distribution
+from contextual_semantic_similarity.evaluate import display_prediction_distribution
 from prepare_data import (convert_data_to_tensors, split_data, compute_split_arrays,
                           load_baseline_tensors, clean_tensors)
-from visualizations import display_error
+from evaluate import display_error
 
 def normalize_true_pred(true_targets, pred_targets, method='min-max'):
 

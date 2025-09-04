@@ -6,7 +6,7 @@ from itertools import product
 import time
 from prepare_data import convert_data_to_tensors, split_data, compute_split_arrays, clean_tensors
 from optimize_saliency import predict, normalize_true_pred, compute_error, objective
-from visualizations import display_prediction_distribution
+from evaluate import display_prediction_distribution
 
 def log_sample(start, end, num, base):
     if not base: base = 10.0

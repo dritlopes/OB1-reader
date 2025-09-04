@@ -540,9 +540,9 @@ def main():
 
     # Word Data
     print('Pre-processing dataframe with texts...')
-    # words_data = WordData(corpus_name, texts_filepath).create_texts_df()
-    # words_data.to_csv(words_filepath, index=False)
-    words_data = pd.read_csv(words_filepath, index_col=0)
+    words_data = WordData(corpus_name, texts_filepath).create_texts_df()
+    words_data.to_csv(words_filepath, index=False)
+    # words_data = pd.read_csv(words_filepath, index_col=0)
 
     # Eye-movement Data
     print('Pre-processing dataframe with eye movements...')

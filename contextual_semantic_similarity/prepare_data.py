@@ -8,7 +8,6 @@ from sklearn.model_selection import train_test_split
 import os
 from collections import defaultdict
 from saliency_utils import normalize, baseline_7letter_2right, compute_letter_map, find_letter_distances, find_letter_distance_2centre_of_context_word
-import pickle
 
 def remove_fixations_nan(data):
 
@@ -202,13 +201,7 @@ def compute_baseline_arrays(fixation_data, filepath, level_type, letter_map, bas
     torch.save(y_base, filepath)
 
 def convert_data_to_tensors(eye_data, word_data, opt_dir, level='word', features='similarity,length,entropy,surprisal',
-                            pre_process=False, norm_method='max-min', data_filepath='', word_to_token_map=None, vectors_dir=''):
-
-    if pre_process:
-        print('Pre-processing data...')
-        eye_data = pre_process_fixation_data(eye_data, norm_method)
-        if data_filepath:
-            eye_data.to_csv(data_filepath.replace('_df.csv', '_cleaned.csv'), index=False)
+                            word_to_token_map=None, vectors_dir=''):
 
     letter_map = compute_letter_map(word_data)
     with open(f'{opt_dir}/letter_map.json', 'w') as f:
@@ -244,6 +237,9 @@ def split_data(_ids, split_type='cross-validation', n_splits=5, test_size=.2, sh
     if split_type == 'cross-validation':
         kf = KFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
         for train_index, test_index in kf.split(_ids):
+            # splits.append({'train_index': _ids[train_index], 'test_index': _ids[test_index]})
+            # print({'train_index': _ids[train_index], 'test_index': _ids[test_index]})
+            print({'train_index': train_index, 'test_index': test_index})
             splits.append({'train_index': train_index, 'test_index': test_index})
 
     else:

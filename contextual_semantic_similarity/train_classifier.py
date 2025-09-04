@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 import torch
 from torch import nn
 from torch.nn.functional import cross_entropy
@@ -10,15 +8,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
-from collections import defaultdict
-from itertools import combinations
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.utils.class_weight import compute_class_weight
-from scipy.stats import ttest_rel
 import os
-from prepare_data import convert_data_to_tensors, split_data, FixationDataset, load_baseline_tensors, clean_tensors
-from visualizations import display_eval, display_prediction_distribution
+from prepare_data import convert_data_to_tensors, split_data, FixationDataset, load_baseline_tensors, clean_tensors, pre_process_fixation_data
+from evaluate import display_eval, display_prediction_distribution
 import pickle
+from sklearn.utils.class_weight import compute_class_weight
+from evaluate import evaluate_model, average_reports
 
 # nn class definition
 class Classifier(nn.Module):
@@ -282,94 +277,6 @@ def test_model(model, test_dataset, device):
 
     return test_pred, test_true
 
-def evaluate_model(y_true:np.array, y_pred:np.array):
-
-    """
-    Evaluate neural network predictions. Print sklearn classification report and confusion matrix.
-
-    :param list y_true: gold labels of test instances.
-    :param list y_pred: predicted labels of test instances.
-    """
-
-    report = pd.DataFrame(classification_report(y_true, y_pred, digits = 3, output_dict=True))
-    # columns = [f'true{label}' for label in np.unique(y_true)]
-    # index = [f'pred{label}' for label in np.unique(y_true)]
-    cfm = pd.DataFrame(confusion_matrix(y_pred,y_true))
-                       # columns=columns,
-                       # index=index)
-
-    return report, cfm
-
-def average_reports(report_list):
-
-
-    df_combined = pd.concat(report_list, axis=0)
-    avg_report = df_combined.groupby('measure').mean(numeric_only=True)
-    sd_report = df_combined.groupby('measure').std(numeric_only=True)
-
-    return avg_report, sd_report
-
-def read_in_scores(splits, opt_dir, measures='f1-score,accuracy',
-                   models=['model','next_word','7letter_2right','random'],participant_ids=''):
-
-    all_values, all_models, all_measures, all_participants = [], [], [], []
-
-    # if participant_ids:
-    #     for participant in participant_ids.split(','):
-    #         for model in models:
-    #             for i in splits:
-    #                 if model == 'model' and not feature_combi:  # model with all features
-    #                     filepath = f'{opt_dir}/report_split{i}_participant{participant}.csv'
-    #                 elif not feature_combi:  # baselines
-    #                     filepath = f'{opt_dir}/report_split{i}_baseline_{model}_participant{participant}.csv'
-    #                 else:  # if feature combi for feature ablation
-    #                     filepath = f'{opt_dir}/report_split{i}_{feature_combi}_participant{participant}.csv'
-    #                 df = pd.read_csv(filepath)
-    #                 for measure in measures.split(','):
-    #                     if measure == 'accuracy':
-    #                         value = df['accuracy'].tolist()[0]
-    #                     else:
-    #                         value = df[df['Unnamed: 0'] == measure]['macro avg'].tolist()[0]
-    #                     all_values.append(value)
-    #                     all_models.append(model)
-    #                     all_measures.append(measure)
-    #                     all_participants.append(participant)
-    # else:
-    for model in models:
-        for i in splits:
-            if model == 'model':  # model with all features
-                filepath = f'{opt_dir}/report_split{i}.csv'
-            elif model in ['random', 'next_word']:  # baselines
-                filepath = f'{opt_dir}/report_split{i}_baseline_{model}.csv'
-            else:  # if feature combi for feature ablation
-                filepath = f'{opt_dir}/report_split{i}_{model}.csv'
-            df = pd.read_csv(filepath)
-            for measure in measures.split(','):
-                if measure == 'accuracy':
-                    value = df['accuracy'].tolist()[0]
-                else:
-                    value = df[df['measure'] == measure]['macro avg'].tolist()[0]
-                all_values.append(value)
-                all_models.append(model)
-                all_measures.append(measure)
-
-    return all_values, all_models, all_measures, all_participants
-
-def test_sig_diff(all_values, all_models, all_measures, opt_dir):
-
-    df = pd.DataFrame({'score': all_values, 'model': all_models, 'measure': all_measures})
-
-    # for each measure, e.g. acc and f1-score, take scores of each model, combine them in pairs, and perform t-test
-    for measure, rows in df.groupby('measure'):
-        score_dict = defaultdict(list)
-        for model, scores in rows.groupby('model'):
-            score_dict[model] = scores['score'].tolist()
-        for model_combi in combinations(rows['model'].unique().tolist(), 2):
-            result = ttest_rel(score_dict[model_combi[0]], score_dict[model_combi[1]])
-            with open(f'{opt_dir}/t-test_{measure}_{model_combi}.csv', 'w') as f:
-                f.write('t-statistic\tp-value\tdf\n')
-                f.write(f'{result.statistic}\t{result.pvalue}\t{result.df}\n')
-
 def train_all(eye_data:pd.DataFrame,
               split_indices:dict[str, list[str]],
               opt_dir:str,
@@ -488,15 +395,8 @@ def train_all(eye_data:pd.DataFrame,
 
     all_targets = np.concatenate(all_targets, axis=0)
     all_predictions = np.concatenate(all_predictions, axis=0)
-    print('Creating graphs of validation results...')
-    models = ['model'] + baselines.split(',')
     display_prediction_distribution(all_targets, all_predictions,
                                     filepath=f'{opt_dir}/distribution_nn_all_val_splits.tiff', col=all_models)
-
-    all_values, all_models, all_measures, _ = read_in_scores(splits=[0, 1, 2, 3, 4], opt_dir=opt_dir,
-                                                             measures='f1-score,accuracy', models=models)
-    display_eval(all_values, all_models, all_measures, filepath=f'{opt_dir}/eval.tiff')
-    test_sig_diff(all_values, all_models, all_measures, opt_dir)
 
 def feature_ablation(eye_data, params_classifier, split_indices, device, opt_dir, tensor_dir, params_dataloader, epochs,
                      baselines, feature_map, features_to_select, ablation_type):
@@ -572,21 +472,14 @@ def feature_ablation(eye_data, params_classifier, split_indices, device, opt_dir
     display_prediction_distribution(all_targets, all_predictions,
                                     filepath=f'{opt_dir}/distribution_nn_feature_ablation_{ablation_type}_all_val_splits.tiff',
                                     col=all_models)
-    features_to_select.extend(baselines.split(','))
-    all_values, all_err_models, all_measures, _ = read_in_scores(splits=[0, 1, 2, 3, 4], opt_dir=opt_dir,
-                                                                 measures='f1-score,accuracy',
-                                                                 models= features_to_select)
-    display_eval(all_values, all_err_models, all_measures, filepath=f'{opt_dir}/eval_feature_ablation_{ablation_type}.tiff')
-    test_sig_diff(all_values, all_err_models, all_measures, opt_dir)
-
 
 def main():
 
     eye_data_filepath = f'data/processed/meco/gpt2/full_gpt2_[1]_meco_window_cleaned.csv'
     word_data_filepath = f'data/processed/meco/words_en_df.csv'
     opt_dir = 'data/processed/meco/gpt2/optimization'
-    compute_tensors = False
     pre_process = False
+    compute_tensors = False
     norm_method = 'z-score'
     baselines='next_word,random'
     features = 'length,surprisal,frequency,has_been_fixated,embedding,previous_sacc_distance,previous_fix_duration'
@@ -615,6 +508,11 @@ def main():
     if not os.path.isdir(tensor_dir):
         os.mkdir(tensor_dir)
 
+    if pre_process:
+        print('Pre-processing data...')
+        eye_data = pre_process_fixation_data(eye_data, norm_method)
+        eye_data.to_csv(eye_data_filepath.replace('_df.csv', '_cleaned.csv'), index=False)
+
     # compute x and y tensors for each text if not computed and stored yet
     if compute_tensors:
         word_to_token_map = None
@@ -622,9 +520,7 @@ def main():
             with open(f'{vectors_dir}/word_to_token_map.pkl', 'rb') as f:
                 word_to_token_map = pickle.load(f)
         convert_data_to_tensors(eye_data=eye_data, word_data=word_data, opt_dir=tensor_dir, level='word',
-                                features=features, pre_process=pre_process, norm_method=norm_method,
-                                data_filepath=eye_data_filepath, word_to_token_map=word_to_token_map,
-                                vectors_dir=vectors_dir)
+                                features=features, word_to_token_map=word_to_token_map, vectors_dir=vectors_dir)
 
     # split at text level
     split_indices_test = split_data(eye_data['trialid'].unique(), split_type='train-test', test_size=.1, shuffle=True,
@@ -633,6 +529,8 @@ def main():
     train_eye_data = eye_data[eye_data['trialid'].isin(split_indices_test[0]['train_index'])].copy()
     split_indices = split_data(train_eye_data['trialid'].unique(), n_splits=5, shuffle=True, random_state=seed,
                                filepath=f'{opt_dir}/cross_val_splits.txt')
+    # split_indices = split_data(eye_data['trialid'].unique(), n_splits=5, shuffle=True, random_state=seed,
+    #                            filepath=f'{opt_dir}/cross_val_splits.txt')
 
     # setting seed
     torch.manual_seed(seed)
@@ -669,7 +567,6 @@ def main():
                                          'length,frequency,surprisal,has_been_fixated,embedding,previous_fix_duration',
                                          'length,frequency,surprisal,has_been_fixated,embedding,previous_sacc_distance'],
                          ablation_type='mean')
-
 
 if __name__ == '__main__':
     main()
