@@ -1,4 +1,5 @@
 # The OB1-reader 
+
 ### A model of eye movements during reading
 
 This repository contains the code to run the OB1-reader (first proposed by Snell et al. 2018), a model that simulates word recognition and eye movement control during reading. The model is a computational implementation of cognitive theories on reading and can be used to test predictions of these theories on various experimental set-ups. Previous studies have shown both quantitative and qualitative fits to human behavioural data in various tasks (e.g. Snell et al. 2018 for natural reading, Meeter et al. 2020 for flankers and priming).
