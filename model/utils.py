@@ -121,7 +121,7 @@ def create_freq_dict(language:str, task_words:list[str]|set[str], freq_threshold
 
     return file_freq_dict
 
-def get_word_freq(words:list[str]|set[str]=None, language:str='english', output_word_frequency_map='', n_high_freq_words = 500, freq_threshold = 1, word_predictability=None, verbose=True)->dict:
+def get_word_freq(words:list[str]|set[str]=None, language:str='english', output_word_frequency_map='', n_high_freq_words = 500, freq_threshold = 1, word_predictability=None, verbose=False)->dict:
 
     """
     Provide dictionary with words as keys and frequencies as values.
@@ -135,6 +135,9 @@ def get_word_freq(words:list[str]|set[str]=None, language:str='english', output_
     :param verbose: whether to print out progress messages.
     :return: dict with words as keys and frequencies as values.
     """
+
+    if verbose:
+        print(f'Attempting to load frequency values...')
 
     # AL: if filepath is given and if frequency map exists there, just read it in
     if output_word_frequency_map and os.path.exists(output_word_frequency_map):
@@ -161,12 +164,14 @@ def get_word_freq(words:list[str]|set[str]=None, language:str='english', output_
             output_word_frequency_map = f"../data/processed/frequency_map_{language}.json"
         with open(output_word_frequency_map, "w") as f:
             json.dump(word_freq_dict, f, ensure_ascii=False)
-        print(f'frequency file stored in {output_word_frequency_map}')
+        if verbose:
+            print(f'Successfully loaded frequency values. Stored in {output_word_frequency_map}')
+            print()
 
     return word_freq_dict
 
 
-def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_source:str, topk:int, pred_threshold:float, model_token:str)->dict:
+def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_source:str, topk:int, pred_threshold:float, model_token:str, verbose=False)->dict:
 
     """
     Create dictionary with predictability values.
@@ -186,7 +191,8 @@ def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_sour
     if pred_source.lower() in ['gpt2', 'llama']:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print('Using device ', str(device))
+        if verbose:
+            print('Using device ', str(device))
 
         if language == 'english':
 
@@ -200,12 +206,13 @@ def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_sour
                 language_model = LlamaForCausalLM.from_pretrained('meta-llama/Llama-2-7b-hf', token=model_token, torch_dtype=torch.float16).to(
                     device)
 
-            # Additional info when using cuda
+            # additional info when using cuda
             if device.type == 'cuda':
-                print(torch.cuda.get_device_name(0))
-                print('Memory Usage:')
-                print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
-                print('Cached:   ', round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1), 'GB')
+                if verbose:
+                    print(torch.cuda.get_device_name(0))
+                    print('Memory Usage:')
+                    print('Allocated:', round(torch.cuda.memory_allocated(0) / 1024 ** 3, 1), 'GB')
+                    print('Cached:   ', round(torch.cuda.memory_reserved(0) / 1024 ** 3, 1), 'GB')
 
             # list of words, set of words, sentences or passages. Each one is equivalent to one trial in an experiment
             for i, sequence in enumerate(texts):
@@ -230,7 +237,7 @@ def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_sour
     elif pred_source == 'cloze':
 
         if stimulus_name:
-
+            # TODO add robustness against inexistent filepaths
             if 'psc' in stimulus_name.lower():
                 filepath = "../data/raw/PSCall_freq_pred.txt"
                 my_data = pd.read_csv(filepath, delimiter="\t",
@@ -278,7 +285,7 @@ def create_pred_file(texts:list[str], stimulus_name:str, language:str, pred_sour
 
     return word_pred_values_dict
 
-def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pred_map='', pred_source='gpt2', stimulus_name:str='', topk='all', pred_threshold=0.01, model_token='')->dict:
+def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pred_map='', pred_source='gpt2', stimulus_name:str='', topk='all', pred_threshold=0.01, model_token='', verbose=False)->dict:
 
     """
     Create dictionary with predictability values for predicted words, given input texts.
@@ -294,13 +301,17 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
     :return: dictionary with predictability values.
     """
 
+    if verbose:
+        print(f"Attempting to load predictability values using {pred_source}...")
+
     # AL: if filepath is given and if predictability map exists there, just read it in
     if output_word_pred_map and os.path.exists(output_word_pred_map):
         with open(output_word_pred_map, "r") as f:
             word_pred_dict = json.load(f)
+
     # AL: if filepath is given, but predictability map does not exist, OR no filepath is given
     else:
-        word_pred_dict = create_pred_file(texts, stimulus_name, language, pred_source, topk, pred_threshold, model_token)
+        word_pred_dict = create_pred_file(texts, stimulus_name, language, pred_source, topk, pred_threshold, model_token, verbose)
         # AL: save out predictability map
         if not output_word_pred_map:
             output_word_pred_map = f"../data/processed/prediction_map_{pred_source}_{language}.json"
@@ -309,6 +320,10 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
         # AL: save out pred map
         with open(output_word_pred_map, "w") as f:
             json.dump(word_pred_dict, f, ensure_ascii=False)
+
+    if verbose:
+        print(f"Successfully loaded predictability values. Saved to {output_word_pred_map}")
+        print()
 
     return word_pred_dict
 
@@ -362,13 +377,11 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
 
         # if this is not the first text of first simulation, read in output of previous texts/simulations and update it with new data
         if os.path.exists(outfile_sim_data):
-            simulation_df = pd.read_csv(outfile_sim_data)
-            pd.concat([simulation_df, simulation_results_df])
+            simulation_df = pd.read_csv(outfile_sim_data, sep='\t')
+            simulation_results_df = pd.concat([simulation_df, simulation_results_df],ignore_index=True)
 
         # save out output
-        dir_path = os.path.dirname(outfile_sim_data)
-        if dir_path and not os.path.exists(dir_path):
-            os.makedirs(dir_path)
+        os.makedirs(os.path.dirname(outfile_sim_data), exist_ok=True)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
     # if simulation id not give, save output above simulation level (save all outputs at once, once all simulations in all input texts are done)
@@ -392,15 +405,26 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
             os.makedirs(dir_path)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
-def get_ngram_frequency_from_file(filepath, sep='\t'):
+def get_ngram_frequency_from_file(filepath, sep=';', verbose=False):
+
+    # TODO make sure diff separators are handled
+    if verbose:
+        print("Ngram gap is set to 0. Attempting to load ngram frequencies...")
 
     # check if filepath exists
+    if not filepath:
+        filepath = "../data/raw/UTF-8bigram_eng.csv"
+
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File {filepath} does not exist trying to get ngram frequencies from file.")
 
     else:
+        if filepath == '../data/raw/UTF-8bigram_eng.csv':
+            if verbose:
+                print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
+                print()
         data = pd.read_csv(filepath, sep=sep)
-
+        if verbose: print('Successfully loaded ngram frequencies.')
     # assert that column 'bigram' and column 'freq' exist
     assert 'bigram' in data.columns and 'freq' in data.columns, f"Columns 'bigram' and 'freq' must exist in the file {filepath}."
 

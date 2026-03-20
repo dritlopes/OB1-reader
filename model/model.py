@@ -4,6 +4,7 @@ import pickle
 import os
 import logging
 from datetime import datetime
+from itertools import combinations
 from model_components import sequence_read
 from reading_helper_functions import string_to_ngrams
 import task_attributes
@@ -53,6 +54,7 @@ def add_lexicon(words:list,
                 logger.info('No text words given to lexicon.')
 
         lexicon = set(words)
+
         if verbose:
             print(f'Lexicon size including input words: {len(lexicon)}')
         logger.info(f'Lexicon size including input words: {len(lexicon)}')
@@ -93,6 +95,10 @@ def add_lexicon(words:list,
                 os.makedirs(dir_path)
             with open(lexicon_filepath, 'wb') as outfile:
                 pickle.dump(lexicon, outfile)
+        if verbose:
+            print(f'Successfully created lexicon.')
+            if save:
+                print(f"Lexicon saved to {lexicon_filepath}")
 
     return lexicon
 
@@ -119,6 +125,7 @@ def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:
             lexicon_word_ngrams[word] = all_word_ngrams
 
         lexicon_word_ngrams = lexicon_word_ngrams
+        if verbose: print('Lexicon word ngrams created.')
     else:
         raise AssertionError(
             'Lexicon is empty. Create model lexicon first.')
@@ -171,7 +178,7 @@ def add_recognition_thresholds(lexicon:list, max_threshold:float, max_activity:f
                 elif verbose:
                     print(f'Word {word} not in frequency map')
             lexicon_thresholds[i] = word_threshold
-
+        if verbose: print(f'Successfully set word recognition thresholds.')
         return lexicon_thresholds
 
     else:
@@ -230,35 +237,36 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
             lexicon_size = len(lexicon)
             word_inhibition_matrix = np.zeros((lexicon_size, lexicon_size), dtype=float)
 
-            for word_1_index in range(lexicon_size):  # MM: receiving unit...
-                # AL: make sure word1-word2, but not word2-word1 or word1-word1.
-                for word_2_index in range(word_1_index + 1, lexicon_size):  # MM: sending unit
-                    word1, word2 = lexicon[word_1_index], lexicon[word_2_index]
-                    # the degree of length similarity
-                    length_sim = 1 - (abs(len(word1) - len(word2)) / max(len(word1), len(word2)))
-                    # if not is_similar_word_length(len(word1), len(word2), pm.word_length_similarity_constant):
-                    #     continue
-                    # else:
-                    # AL: lexicon_word_ngrams already contains all ngrams (bigrams and included monograms)
-                    ngram_common = list(
-                        set(lexicon_word_ngrams[word1]).intersection(set(lexicon_word_ngrams[word2])))
-                    n_total_overlap = len(ngram_common)
-                    # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
-                    word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
-                        len(lexicon_word_ngrams[word1]))) * length_sim
-                    word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
-                        len(lexicon_word_ngrams[word2]))) * length_sim
-                    # print("word1 ", word1, "word2 ", word2, "overlap ", n_total_overlap, "len w1 ", len(lexicon_word_ngrams[word1]))
-                    # print("inhib one way", word_overlap_matrix[word_1_index, word_2_index])
+            # for word_1_index in range(lexicon_size):  # MM: receiving unit...
+            #     # AL: make sure word1-word2, but not word2-word1 or word1-word1.
+            #     for word_2_index in range(word_1_index + 1, lexicon_size):  # MM: sending unit
+            #         word1, word2 = lexicon[word_1_index], lexicon[word_2_index]
+            for pair in combinations(lexicon, 2):
+                word1, word2 = pair[0], pair[1]
+                # the degree of length similarity
+                length_sim = 1 - (abs(len(word1) - len(word2)) / max(len(word1), len(word2)))
+                # if not is_similar_word_length(len(word1), len(word2), pm.word_length_similarity_constant):
+                #     continue
+                # else:
+                ngram_common = list(
+                    set(lexicon_word_ngrams[word1]).intersection(set(lexicon_word_ngrams[word2])))
+                n_total_overlap = len(ngram_common)
+                # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
+                word_1_index, word_2_index = lexicon.index(word1), lexicon.index(word2)
+                # print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
+                #       " ngram overlap ", ngram_common)
+                word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
+                    len(lexicon_word_ngrams[word1]))) * length_sim
+                word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
+                    len(lexicon_word_ngrams[word2]))) * length_sim
+                # print("inhib one way", word_overlap_matrix[word_1_index, word_2_index])
 
             if save:
                 if not matrix_filepath or not matrix_parameters_filepath:
                     matrix_filepath = '../data/processed/inhibition_matrix_previous.pkl'
                     matrix_parameters_filepath = '../data/processed/inhibition_matrix_parameters_previous.pkl'
-                    if not os.path.exists(matrix_filepath):
-                        os.makedirs(matrix_filepath)
-                    if not os.path.exists(matrix_parameters_filepath):
-                        os.makedirs(matrix_parameters_filepath)
+                    os.makedirs(os.path.dirname(matrix_filepath), exist_ok=True)
+                    os.makedirs(os.path.dirname(matrix_parameters_filepath), exist_ok=True)
 
                 with open(matrix_filepath, "wb") as f:
                     pickle.dump(word_inhibition_matrix, f)
@@ -266,7 +274,10 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 size_of_file = os.path.getsize(matrix_filepath)
                 with open(matrix_parameters_filepath, "wb") as f:
                     pickle.dump(str(lexicon_word_ngrams) + str(lexicon_size) + str(size_of_file), f)
-
+            if verbose:
+                print(f'Successfully loaded word-to-word inhibition matrix.')
+                if save:
+                    print(f'Matrix saved to {matrix_filepath}')
             return word_inhibition_matrix
 
         elif not lexicon:
@@ -326,7 +337,7 @@ class ReadingModel:
                  lexicon_filepath: str = '',
                  matrix_filepath: str = '',
                  matrix_parameters_filepath: str = '',
-                 ngram_frequency_filepath: str = '',
+                 ngram_frequency_filepath: str = "",
                  include_predicted_without_frequencies: bool = False,
                  save_lexicon: bool = False,
                  save_word_inhibition: bool = False,
@@ -429,27 +440,29 @@ class ReadingModel:
         self.verbose = verbose
 
         self.time = dt_string
+        start_time = time.perf_counter()
+
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
 
+        # TODO create data directory and subfolders if non-existent
+
+        # if ngram gap is 0, load ngram frequencies
         if self.ngram_gap == 0:
-            if not ngram_frequency_filepath:
-                if verbose: print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
-                logger.info("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
-            self.bigramFrame = get_ngram_frequency_from_file("../data/raw/UTF-8bigram_eng.csv", sep=';')
+            self.bigramFrame = get_ngram_frequency_from_file(ngram_frequency_filepath, verbose=verbose)
         else:
             self.bigramFrame = None
 
         # if use predictability but no predictability dict is provided, create predictability dict if texts are provided and if language and pred_source are supported
         if texts and use_predictability and not predictability_values:
-            predictability_values = get_word_pred(texts, language=language, pred_source=pred_source, pred_threshold=pred_threshold, topk=top_k, output_word_pred_map=predictability_filepath)
+            predictability_values = get_word_pred(texts, language=language, pred_source=pred_source, pred_threshold=pred_threshold, topk=top_k, output_word_pred_map=predictability_filepath, verbose=verbose)
         self.predictability_values = predictability_values
 
         # if use frequency but not frequency dict is provided, create frequency dict with default resources if language is supported
         if use_frequency and not frequency_values:
             input_words = None
             if self.tokens: input_words = self.processed_tokens
-            frequency_values = get_word_freq(words=input_words, language=language, word_predictability=self.predictability_values, output_word_frequency_map=frequency_filepath)
+            frequency_values = get_word_freq(words=input_words, language=language, word_predictability=self.predictability_values, output_word_frequency_map=frequency_filepath, verbose=verbose)
         self.frequency_values = frequency_values
 
         self.lexicon = add_lexicon(self.processed_tokens, lexicon_filepath, frequency_values, predictability_values, include_predicted_without_frequencies, save_lexicon, verbose)
@@ -458,6 +471,9 @@ class ReadingModel:
                                                                  self.freq_weight, frequency_values, self.use_threshold, verbose)
         self.word_inhibitions = add_word_inhibition_matrix(self.lexicon, self.lexicon_word_ngrams, matrix_filepath,
                                                            matrix_parameters_filepath, verbose, save_word_inhibition)
+
+        time_elapsed = time.perf_counter() - start_time
+        if verbose: print("Time elapsed: " + str(int(time_elapsed)) + " seconds.")
 
     def read(self, texts: list[str] = None,
              task_name: str = 'reading',
@@ -478,6 +494,8 @@ class ReadingModel:
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
         :return: the simulation output of the model.
         """
+
+        print(f'\nRunning simulations...')
 
         output = list()
         start_time = time.perf_counter()
@@ -510,6 +528,7 @@ class ReadingModel:
             simulation_output = []
             for text_id, text in enumerate(texts):
                 text_tokens = [pre_process_string(token) for token in text.split(' ')]
+                text_tokens = [token for token in text_tokens if token != '']
                 text_output = sequence_read(self,
                                             task,
                                             text_tokens,
@@ -523,6 +542,7 @@ class ReadingModel:
             output.append(simulation_output)
 
         time_elapsed = time.perf_counter() - start_time
-        print("Time elapsed: " + str(time_elapsed))
+        time_elapsed = str(round(time_elapsed/60,2)).replace('.','')
+        print(f"Duration of simulation runs: {time_elapsed[0]} minute(s) and {time_elapsed[1:]} seconds.")
 
         return output

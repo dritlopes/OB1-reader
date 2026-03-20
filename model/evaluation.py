@@ -7,6 +7,8 @@ from model_components import FixationOutput
 from utils import pre_process_string
 import re
 
+# TODO document functions and add explanation of outputs to readme
+
 def to_meco_dict(wls: WordLevelStatistics):
     return {
         "ia": wls.word,
@@ -37,6 +39,7 @@ def to_dataframe(wlss: list[WordLevelStatistics], format: Literal["provo", "meco
     raise NotImplementedError()
 
 def eval_stats(x,y,label):
+
     rmse = np.sqrt(((x-y) ** 2).mean())
     corr = np.corrcoef(x, y)[0, 1]
     # print(f"\n{label}: RMSE={rmse}, mean_pred={np.mean(x)}, mean_true={np.mean(y)}, std_pred={np.std(x)}, std_true={np.std(y)}, corr={corr}\n")
@@ -50,6 +53,7 @@ def eval_stats(x,y,label):
     }
 
 def extract_sentences(dataset:Literal['provo', 'meco'], data_dir: str=None, text_ids: list[int]=None):
+
     if dataset == 'provo':
         if data_dir is None:
             data_dir = "../data/raw/Provo_Corpus-Eyetracking_Data.csv"
@@ -57,6 +61,7 @@ def extract_sentences(dataset:Literal['provo', 'meco'], data_dir: str=None, text
         word_level_id_label = "IA_ID" # word level id
         word_content_label = "IA_LABEL"
         sep = ""
+
     elif dataset == 'meco':
         if data_dir is None:
             data_dir = "../data/raw/joint_data_trimmed.csv"
@@ -64,17 +69,16 @@ def extract_sentences(dataset:Literal['provo', 'meco'], data_dir: str=None, text
         word_level_id_label = "ianum"
         word_content_label = "ia"
         sep = " "
+
     else:
         raise NotImplementedError("Parameter `dataset` must be either `provo` or `meco`.")
+
     texts = []
     df_original = pd.read_csv(data_dir)
     if dataset == 'meco':
         df_original = df_original[df_original['lang']=='en'] # TODO: support more languages
     if text_ids is None:
-        if dataset == 'provo':
-            text_ids = list(range(1,56)) # By default, there are sentences 1, 2, ..., 55 in Provo
-        else:
-            text_ids = list(range(1,13)) # By default, there are sentences 1, 2, ..., 12 in Meco
+        text_ids = list(df_original[text_level_id_label].unique())
     for text_id in text_ids:
         df = deepcopy(df_original[df_original[text_level_id_label]==text_id])
         df = df.groupby(word_level_id_label).agg({
@@ -125,6 +129,7 @@ def aggregate_and_align(gt, sim, dataset, text_id, stat_labels, word_level_id_la
     return gt, sim
 
 def evaluate(output:list[list[list[FixationOutput]]], dataset: Literal['provo', 'meco'] = 'provo', data_dir: str|None=None, text_ids: list[int]=None, eval_output_path = "../data/eval_output/eval.csv", averaged_simulation_output_path="../data/eval_output/simulation.csv"):
+
     if dataset == 'provo':
         if data_dir is None:
             data_dir = "../data/raw/Provo_Corpus-Eyetracking_Data.csv"
@@ -176,6 +181,7 @@ def evaluate(output:list[list[list[FixationOutput]]], dataset: Literal['provo', 
             result[text_level_id_label] = text_id
             result["Label"] = label
             results.append(result)
+
     res_df = pd.DataFrame(results)
     res_df.to_csv(eval_output_path)
     sim_df = pd.concat(sim_results, axis=0, ignore_index=True)

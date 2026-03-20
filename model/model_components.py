@@ -491,47 +491,94 @@ def activate_predicted_upcoming_word(position:int|str,
         if predicted['target'] != target_word and verbose:
             warnings.warn(f'Target word in predictability map "{predicted["target"]}" not the same as target word in model stimuli "{target_word}", position {position}')
 
-        for token, pred in predicted['predictions'].items():
+        pred_previous_word = 0
+        # determine the predictability of the previous text word to weight predictability of position
+        if recognized_word_at_position[position - 1]:
+            pred_previous_word = 1
+        # if previous word has not been recognized yet
+        else:
+            # if position not the first word in the text and in predictability map
+            if position - 1 > 0 and str(position - 1) in pred_dict.keys():
+                # if previous text word is among the predictions
+                if pred_dict[str(position - 1)]['target'] in pred_dict[str(position - 1)]['predictions'].keys():
+                    # and previous word to that word has been recognized
+                    if position - 2 >= 0 and recognized_word_at_position[position - 2]:
+                        # weight pred by the pred value of the previous word that is > 0 and < 1
+                        pred_previous_word = pred_dict[str(position - 1)]['predictions'][
+                            pred_dict[str(position - 1)]['target']]
+                        # pred_previous_word = entropy[position-1]
 
-            if token in lexicon:
-                i = lexicon.index(token)
-                pred_previous_word = 0
-                # determine the predictability of the previous text word to weight predictability of position
-                if recognized_word_at_position[position - 1]:
-                    pred_previous_word = 1
-                # if previous word has not been recognized yet
-                else:
-                    # if position not the first word in the text and in predictability map
-                    if position - 1 > 0 and str(position - 1) in pred_dict.keys():
-                        # if previous text word is among the predictions
-                        if pred_dict[str(position-1)]['target'] in pred_dict[str(position-1)]['predictions'].keys():
-                            # and previous word to that word has been recognized
-                            if position - 2 >= 0 and recognized_word_at_position[position - 2]:
-                                # weight pred by the pred value of the previous word that is > 0 and < 1
-                                pred_previous_word = pred_dict[str(position-1)]['predictions'][pred_dict[str(position-1)]['target']]
-                                # pred_previous_word = entropy[position-1]
-
-                # weight predictability with predictability (certainty) of previous text word
-                if pred_previous_word:
+        # weight predictability with predictability (certainty) of previous text word
+        if pred_previous_word:
+            for token, pred in predicted['predictions'].items():
+                if token in lexicon:
+                    i = lexicon.index(token)
                     # pre_act = (pred * pred_weight) / pred_previous_word
                     pre_act = (pred * pred_previous_word * pred_weight)
                     lexicon_word_activity[i] += pre_act
-
                     if position == fixation + 1 and pre_act > 0:
                         pred_bool = True
-
                     if verbose:
                         print(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
                     logger.info(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
-
                 else:
-                    logger.info(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+                    logger.info(
+                        f'Predicted word "{token}" at position of text word "{target_word}" not in model lexicon')
                     if verbose:
-                        print(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+                        print(
+                            f'Predicted word "{token}" at position of text word "{target_word}" not in model lexicon')
+        else:
+            logger.info(
+                f'Since no predictability of previous word, no word was pre-activated at position of text word "{target_word}"')
+            if verbose:
+                print(
+                    f'Since no predictability of previous word, no word was pre-activated at position of text word "{target_word}"')
     else:
         if verbose:
             print(f'Position {position} not found in predictability map')
         logger.info(f'Position {position} not found in predictability map')
+
+        # for token, pred in predicted['predictions'].items():
+        #
+        #     if token in lexicon:
+        #         i = lexicon.index(token)
+        #         pred_previous_word = 0
+        #         # determine the predictability of the previous text word to weight predictability of position
+        #         if recognized_word_at_position[position - 1]:
+        #             pred_previous_word = 1
+        #         # if previous word has not been recognized yet
+        #         else:
+        #             # if position not the first word in the text and in predictability map
+        #             if position - 1 > 0 and str(position - 1) in pred_dict.keys():
+        #                 # if previous text word is among the predictions
+        #                 if pred_dict[str(position-1)]['target'] in pred_dict[str(position-1)]['predictions'].keys():
+        #                     # and previous word to that word has been recognized
+        #                     if position - 2 >= 0 and recognized_word_at_position[position - 2]:
+        #                         # weight pred by the pred value of the previous word that is > 0 and < 1
+        #                         pred_previous_word = pred_dict[str(position-1)]['predictions'][pred_dict[str(position-1)]['target']]
+        #                         # pred_previous_word = entropy[position-1]
+        #
+        #         # weight predictability with predictability (certainty) of previous text word
+        #         if pred_previous_word:
+        #             # pre_act = (pred * pred_weight) / pred_previous_word
+        #             pre_act = (pred * pred_previous_word * pred_weight)
+        #             lexicon_word_activity[i] += pre_act
+        #
+        #             if position == fixation + 1 and pre_act > 0:
+        #                 pred_bool = True
+        #
+        #             if verbose:
+        #                 print(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
+        #             logger.info(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
+        #
+        #         else:
+        #             logger.info(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+        #             if verbose:
+        #                 print(f'Word "{token} was not pre-activated ({pred} * {pred_previous_word} * {pred_weight}) in position of text word "{target_word}"')
+    # else:
+    #     if verbose:
+    #         print(f'Position {position} not found in predictability map')
+    #     logger.info(f'Position {position} not found in predictability map')
 
     return lexicon_word_activity, pred_bool
 
