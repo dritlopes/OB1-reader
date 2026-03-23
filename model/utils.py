@@ -405,9 +405,8 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
             os.makedirs(dir_path)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
-def get_ngram_frequency_from_file(filepath, sep=';', verbose=False):
+def get_ngram_frequency_from_file(filepath, verbose=False):
 
-    # TODO make sure diff separators are handled
     if verbose:
         print("Ngram gap is set to 0. Attempting to load ngram frequencies...")
 
@@ -420,12 +419,16 @@ def get_ngram_frequency_from_file(filepath, sep=';', verbose=False):
 
     else:
         if filepath == '../data/raw/UTF-8bigram_eng.csv':
+            data = pd.read_csv(filepath, sep=';')
             if verbose:
                 print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
                 print()
-        data = pd.read_csv(filepath, sep=sep)
+        else:
+            data = pd.read_csv(filepath)
+
         if verbose: print('Successfully loaded ngram frequencies.')
-    # assert that column 'bigram' and column 'freq' exist
-    assert 'bigram' in data.columns and 'freq' in data.columns, f"Columns 'bigram' and 'freq' must exist in the file {filepath}."
+
+        # assert that column 'bigram' and column 'freq' exist
+        assert 'bigram' in data.columns and 'freq' in data.columns, f"Columns 'bigram' and 'freq' must exist in the file {filepath}."
 
     return data

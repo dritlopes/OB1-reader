@@ -365,7 +365,7 @@ class ReadingModel:
         :param top_k: in case of language model providing predictions, save only the k highest predictions.
         :param pred_threshold: in case of language model providing predictions, save only the predictions above certain threshold.
         :param pred_weight: scaling parameter in pre-activation formula.
-        :param pred_source: the source which generates predictability values. Default is gpt2 language model.
+        :param pred_source: the source which generates predictability values. Default is gpt2 language model. Supported options: gpt2, llama, or cloze. For cloze values, make sure you have the required file (see function create_pred_file in utils.py)
         :param attend_width: how long the attention window should be when processing the input stimulus.
         :param max_attend_width: maximum attention width; used in reading simulation where attend_with is dynamic.
         :param min_attend_width: minimum attention width; used in reading simulation where attend_with is dynamic.
@@ -445,7 +445,9 @@ class ReadingModel:
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
 
-        # TODO create data directory and subfolders if non-existent
+        # make sure data directory is created if non-existent
+        os.makedirs('../data/raw', exist_ok=True)
+        os.makedirs('../data/processed', exist_ok=True)
 
         # if ngram gap is 0, load ngram frequencies
         if self.ngram_gap == 0:
