@@ -5,7 +5,7 @@ import os
 import logging
 from datetime import datetime
 from itertools import combinations
-from model_components import sequence_read
+from model_components import sequence_read, run_lexdecis
 from reading_helper_functions import string_to_ngrams
 import task_attributes
 from utils import get_ngram_frequency_from_file, write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
@@ -137,9 +137,8 @@ def add_recognition_thresholds(lexicon:list, max_threshold:float, max_activity:f
                                use_threshold: bool,
                                verbose:bool) -> np.ndarray:
 
-    """Determines the thresholds for recognition for each word in the lexicon of the model.
-    A model lexicon is required to generate thresholds.
-    If no frequency values are provided, all thresholds are set to maximum word threshold, which is set in the model initialization.
+    """If use_threshold=true, each word in lexicon gets own thresholds for recognition as in Snell et al. (2018) OB1 version.
+    If use_threshold=false or  no model lexicon is present, thresholds equal maximum word threshold set in the model initialization.
 
     :param use_threshold: whether to use thresholds as defined by word frequency. If not, set all thresholds to max_threshold.
     :param lexicon: contains all words to be processed by the model. The model's vocabulary.
@@ -328,7 +327,7 @@ class ReadingModel:
                  use_saccade_error:bool = True,
                  recognition_speeding:float = 5.0,
                  use_frequency:bool = True,
-                 use_predictability:bool = True,
+                 use_predictability:bool = False,
                  language:str = 'english',
                  frequency_values: dict = None,
                  predictability_values: dict = None,
@@ -477,7 +476,7 @@ class ReadingModel:
 
     def read(self, texts: list[str] = None,
              task_name: str = 'reading',
-             number_of_simulations: int = 1,
+             nr_of_sims: int = 1,
              output_filepath: str = '',
              verbose: bool = True,
              **kwargs: object) ->list:
@@ -488,7 +487,7 @@ class ReadingModel:
         :param texts: list of texts to process.
         Preferably aligned with eye-tracking data which will be used to evaluate simulations.
         :param task_name: the task name.
-        :param number_of_simulations: how many times the model should read the give text(s).
+        :param nr_of_sims: how many times the model should read the give text(s).
         :param output_filepath: filepath to save the processed text.
         :param verbose: whether to show progress messages in the shell or not.
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
@@ -500,8 +499,31 @@ class ReadingModel:
         output = list()
         start_time = time.perf_counter()
 
+        if verbose: print("Task: " + task_name)
+
+        if not texts:
+            texts = self.texts
+            if not texts:
+                raise Exception('No texts to process. Please provide texts to process either in this function or when creating instance of ReadingModel.')
+
         if task_name == 'reading':
             task = task_attributes.TaskAttributes(task_name, **kwargs)
+            for simulation_id in range(nr_of_sims):
+                simulation_output = []
+                for text_id, text in enumerate(texts):
+                    text_tokens = [pre_process_string(token) for token in text.split(' ')]
+                    text_tokens = [token for token in text_tokens if token != '']
+                    text_output = sequence_read(self,
+                                                task,
+                                                text_tokens,
+                                                text_id,
+                                                verbose=verbose)
+                    simulation_output.append(text_output)
+                    # if filepath is given to save output, save output as the model finishes reading a text
+                    if output_filepath:
+                        write_out_simulation_data(text_output, output_filepath, simulation_id = simulation_id, text_id = text_id)
+                # save output of each simulation
+                output.append(simulation_output)
 
         elif task_name == 'embedded_words':
             task = task_attributes.EmbeddedWords(task_name, **kwargs)
@@ -510,6 +532,18 @@ class ReadingModel:
         elif task_name == 'flanker':
             task = task_attributes.Flanker(task_name, **kwargs)
             self.attend_width = 15
+            for simulation_id in range(nr_of_sims):
+                simulation_output = []
+                for i in range(len(texts)):
+                    if verbose:
+                        print(f'---Trial {i} with stim {texts[i]}---')
+                    text_output = run_lexdecis(self,
+                                            task,
+                                            texts[i],
+                                            verbose=verbose)
+                    simulation_output.append(text_output)
+                # save output of each simulation
+                output.append(simulation_output)
 
         elif task_name == 'transposed':
             task = task_attributes.Transposed(task_name, **kwargs)
@@ -518,28 +552,6 @@ class ReadingModel:
 
         else:
             raise NotImplementedError("Task not implemented. Please choose from 'reading', 'embedded_words', 'flanker', or 'transposed'. Otherwise, please check your task name.")
-
-        if not texts:
-            texts = self.texts
-            if not texts:
-                raise Exception('No texts to process. Please provide texts to process either in this function or when creating instance of ReadingModel.')
-
-        for simulation_id in range(number_of_simulations):
-            simulation_output = []
-            for text_id, text in enumerate(texts):
-                text_tokens = [pre_process_string(token) for token in text.split(' ')]
-                text_tokens = [token for token in text_tokens if token != '']
-                text_output = sequence_read(self,
-                                            task,
-                                            text_tokens,
-                                            text_id,
-                                            verbose=verbose)
-                simulation_output.append(text_output)
-                # if filepath is given to save output, save output as the model finishes reading a text
-                if output_filepath:
-                    write_out_simulation_data(text_output, output_filepath, simulation_id = simulation_id, text_id = text_id)
-            # save output of each simulation
-            output.append(simulation_output)
 
         time_elapsed = time.perf_counter() - start_time
         time_elapsed = str(round(time_elapsed/60,2)).replace('.','')

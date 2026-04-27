@@ -88,6 +88,21 @@ def extract_sentences(dataset:Literal['provo', 'meco'], data_dir: str=None, text
 
     return texts
 
+def extract_stimuli(datafile, data_dir: str=None, text_ids: list[int]=None):
+
+    if data_dir is None:
+        data_dir = "../data/raw/"
+
+    texts = []
+    df_original = pd.read_csv(data_dir+datafile, sep=',')
+    #print(df_original.head())
+    if text_ids is None:
+        texts = df_original
+    else:
+        texts = df_original.loc[text_ids]
+
+    return texts
+
 def cleaned(word: str):
     return re.sub(r"[^a-zA-Z0-9]", "", word).lower()
 

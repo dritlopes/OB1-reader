@@ -5,6 +5,8 @@ from torch import nn
 import math
 import warnings
 import pandas as pd
+
+from model.reading_helper_functions import get_blank_screen_stimulus
 from reading_helper_functions import string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
     get_midword_position_for_surrounding_word, calc_word_attention_right, calc_saccade_error, define_slot_matching_order, \
     find_word_edges, sample_from_norm_distribution
@@ -518,8 +520,8 @@ def activate_predicted_upcoming_word(position:int|str,
                     lexicon_word_activity[i] += pre_act
                     if position == fixation + 1 and pre_act > 0:
                         pred_bool = True
-                    if verbose:
-                        print(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
+                    #if verbose:
+                        #print(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
                     logger.info(f'Word "{token}" received pre-activation <{round(pre_act,3)} ({pred} * {pred_previous_word} * {pred_weight})> in position of text word "{target_word}" ({round(lexicon_word_activity[i],3)} -> {round(lexicon_word_activity[i] + pre_act,3)})')
                 else:
                     logger.info(
@@ -1225,7 +1227,7 @@ def sequence_read(model,
                   verbose:bool=True):
 
     """
-    Read text sequence (=words).
+    Read text sequence (=string of words).
 
     :param model: an instance of ReadingModel.
     :param task: an instance of TaskAttributes.
@@ -1251,5 +1253,93 @@ def sequence_read(model,
         fixation_processor.output = fixation_processor.fixate(reader.output, verbose=verbose)
         reader.output.append(fixation_processor.output)
         end_of_text = fixation_processor.move_fixation(end_of_text, verbose=verbose)
+
+    return reader.output
+
+def run_lexdecis(model,
+                  task,
+                  text,
+                  verbose:bool=True,
+                  prime: str=""):
+    """
+    Run 1 lexical decis trial. N.B., code is agnostic whether stim is word or not.
+
+    :param model: an instance of ReadingModel.
+    :param task: an instance of TaskAttributes.
+    :param text: stimulus presented on, one trial.
+    :param verbose: whether to print progress.
+    :param prime: string shown as prime if there is a prime
+
+    :return: a list of FixationOutputs (one per fixation).
+    """
+
+    n_cycle = 1  # counter for cycles
+    recog_cycle = n_cycle
+    ## FIXME: for whatever reason, task.blank_screen_cycles_begin and blank_screen_cycles_end are tuples instead of int
+    totalcycles = task.blank_screen_cycles_begin[0] + task.prime_cycles + task.stim_cycles + task.blank_screen_cycles_end[0]
+    false_guess, decision = False, False
+    # init activity matrix with min activity. Assumption that each trial is independent.
+    lexicon_word_activity = np.zeros((len(model.lexicon)), dtype=float)
+    lexicon_word_activity[:] = model.min_activity
+    decision_threshold = 0.0
+    A1 = 0.0
+    A2 = 0.0
+
+    # keep processing stimuli as long as trial lasts
+    while n_cycle < totalcycles:
+
+        # stimulus changes within a trial to blankscreen, prime
+        if n_cycle < task.blank_screen_cycles_begin[0]:
+            stimulus = get_blank_screen_stimulus(task.blank_screen_type)
+        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles-1):
+            # if priming expt, do cycles with prime. If not, no n_cycle fulfills this condition & not previous one
+            stimulus = prime
+        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles):
+            # use last prime cycle to present mask
+            stimulus =  get_blank_screen_stimulus('hashgrid')
+        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles + task.stim_cycles):
+            stimulus = text
+        else:
+            stimulus = get_blank_screen_stimulus(task.blank_screen_type)
+
+        eye_position = math.floor(len(stimulus) // 2)
+        attention_position = eye_position
+        stim_positions = [i for i in range(0, len(stimulus.split(' ')))] # = [0, 1, 2, 3, 4]
+        fixated_position_in_stim = math.floor(len(stimulus.split(' ')) / 2)
+
+        # stimulus_matched_slots keeps track of which words have been recognized in the stimulus
+        # create it if first stimulus or a changed one but only if more than 1 letter
+        if len(stim_positions) <= 1:
+            stimulus_matched_slots = np.empty(len(stimulus.split()), dtype=object)
+
+        # define order for slot matching. Computed within cycle loop bcs stimulus may change within trial
+        order_match_check = define_slot_matching_order(len(stimulus.split(' ')), fixated_position_in_stim, attend_width)
+
+        # compute word excitatory input given stimulus
+        n_ngrams, total_ngram_activity, all_ngrams, word_input = compute_words_input(stimulus,
+                                                                                     lexicon_word_ngrams,
+                                                                                     eye_position,
+                                                                                     attention_position,
+                                                                                     attend_width,
+                                                                                     pm,
+                                                                                     word_frequencies,
+                                                                                     bigramFrame)
+
+        trial_data['total ngram act per cycle'].append(total_ngram_activity)
+        # trial_data['ngrams'].append(ngrams_identity)
+        # trial_data['n of ngrams per cycle'].append(len(all_ngrams))
+
+        # update word activity using word-to-word inhibition and decay
+        lexicon_word_activity, lexicon_word_inhibition = update_word_activity(lexicon_word_activity,
+                                                                              word_inhibition_matrix,
+                                                                              pm,
+                                                                              word_input,
+                                                                              len(lexicon))
+
+    fixation_processor.define_stimulus_and_eye_pos(verbose=verbose)
+    fixation_processor.update_attention_width()
+    fixation_processor.output = fixation_processor.fixate(reader.output, verbose=verbose)
+    reader.output.append(fixation_processor.output)
+    end_of_text = fixation_processor.move_fixation(end_of_text, verbose=verbose)
 
     return reader.output
