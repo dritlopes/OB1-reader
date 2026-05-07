@@ -16,11 +16,15 @@ Check out some of the work done as part of this PhD project:
 
 ## How to run the code
 
-1. To run simulations with OB1-reader, you need input text(s), which you can either provide as a file or as a list of strings directly as an argument to the model (see in example code below). 
+1. To run simulations with OB1-reader, you need input text(s), which you can either provide as a file or as a list of strings directly as an argument to the model (see in example code below). We provide one example text from Provo and one example text from MECO in `data/raw`.
+
+    * For the full Provo corpus, add the file `Provo_Corpus-Eyetracking_Data.csv` to `data\raw`. The file can be found at https://osf.io/sjefs/.
+    * For the full English part of the MECO corpus (v1), add the file `joint_data_trimmed.rda` to `data\raw`. The file can be found at https://osf.io/3527a/.
+
 2. You wil also need resources for frequency and predictability of the words in the input text(s). Place the resources in the directory `data/raw` (see Repository Structure below for more information).
 
    * Frequencies for English can be `SUBTLEX_UK`, which can be found at https://osf.io/zq49t/.
-   * If your input texts are from MECO, use `joint_fix_trimmed<.rda/.csv>,` which contains the fixation report to evaluate the simulations, and `wordlist_meco.csv` for the word frequency values. All files can be obtained at https://osf.io/3527a/.
+   * If your input texts are from MECO, use `joint_fix_trimmed.rda` which contains the fixation report to evaluate the simulations, and `wordlist_meco.csv` for the word frequency values. All files can be obtained at https://osf.io/3527a/.
    * If your input texts are from Provo, and you'd like to use Provo's cloze predictability values, use `Provo_Corpus-Predictability_Norms.csv`, which can be found at https://osf.io/sjefs/.
 
 3. Example code for running simulations with OB1-reader:
