@@ -21,53 +21,6 @@ def get_stimulus_edge_positions(stimulus:str)->list[int]:
 
     return stimulus_word_edge_positions
 
-# def string_to_open_ngrams(string:str, gap:int)->(list[str],list[float],list[list[int]]):
-#
-#     """
-#     Determine the ngrams the word(s) in the model input activates, their activation weights and positions in the string.
-#
-#     :param string: word(s) in model input.
-#     :param gap: the number of characters between two characters allowed to still form a bi-gram.
-#     :return: the ngrams the word activates, the weights of ngram activation for each ngram, and where they are located in the word.
-#     """
-#
-#     all_ngrams, all_weights, all_locations = [], [], []
-#
-#     # AL: make sure string contains one space before and after for correctly finding word edges
-#     string = " " + string + " "
-#     edge_locations = get_stimulus_edge_positions(string)
-#     string = string.strip()
-#
-#     for position, letter in enumerate(string):
-#         weight = 0.5
-#         # AL: to avoid ngrams made of spaces
-#         if letter != ' ':
-#             if position in edge_locations:
-#                 weight = 1.
-#                 # AL: increases weigth of unigrams with no crowding (one-letter words, e.g. "a")
-#                 if 0 < position < len(string) - 1:
-#                     if string[position-1] == ' ' and string[position+1] == ' ':
-#                         weight = 3
-#                 # AL: include monogram if at word edge
-#                 all_ngrams.append(letter)
-#                 all_weights.append(weight)
-#                 all_locations.append([position])
-#
-#             # AL: find bigrams
-#             for i in range(1, gap+1):
-#                 # AL: make sure second letter of bigram does not cross the stimulus string nor the word
-#                 if position+i >= len(string) or string[position+i] == ' ':
-#                     break
-#                 # Check if second letter in bigram is edge
-#                 if position+i in edge_locations:
-#                     weight = weight * 2
-#                 bigram = letter+string[position+i]
-#                 all_ngrams.append(bigram)
-#                 all_locations.append([position, position+i])
-#                 all_weights.append(weight)
-#
-#     return all_ngrams, all_weights, all_locations
-
 def string_to_ngrams(string, bigramFrame=None, gap=0):
     """
     Determine the ngrams the word(s) in the model input activates, their activation weights, and positions in the string.
@@ -84,39 +37,26 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
         raise ValueError("bigramFrame must be provided for closed ngrams (gap=0)")
 
     # Preprocess string
-    if gap == 0:
-        string = string.strip()
-    else:
-        string = " " + string + " "
-        edge_locations = get_stimulus_edge_positions(string)
-        string = string.strip()
+    string = " " + string + " "
+    edge_locations = get_stimulus_edge_positions(string)
+    string = string.strip()
 
     for position, letter in enumerate(string):
         if letter == ' ':
             continue
 
         # Determine weight for unigrams
-        weight = 1.0 if gap == 0 else 0.5
+        weight = 0.5
         if gap > 0 and position in edge_locations:
             weight = 1.0
             if 0 < position < len(string) - 1 and string[position - 1] == ' ' and string[position + 1] == ' ':
+                # MM: one-letter words are edge on two sides, so extra weight
                 weight = 3.0
 
         # Add unigrams
         all_ngrams.append(letter)
         all_weights.append(weight)
         all_locations.append([position])
-
-        # Add edge-specific bigrams for closed ngrams
-        if gap == 0:
-            if position == 0 or (position > 0 and string[position - 1] == " "):  # Start of word
-                all_ngrams.append(' ' + letter)
-                all_weights.append(weight)
-                all_locations.append([position])
-            if position == len(string) - 1 or (position < len(string) - 1 and string[position + 1] == " "):  # End of word
-                all_ngrams.append(letter + ' ')
-                all_weights.append(weight)
-                all_locations.append([position])
 
         # Add bigrams
         for i in range(1, gap + 1):
@@ -125,24 +65,28 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
 
             bigram = letter + string[position + i]
             bigram_weight = weight
+            if position + i in edge_locations:
+                bigram_weight *= 2
 
-            if gap == 0:  # Closed ngrams
-                if i > 1:
-                    bigram_weight = 0.5
+            if gap == 0:  # Closed ngrams are weighted by their frequency in language
                 if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
                     bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
-                    if gap == 1 and (position == 0 or (position > 0 and string[position - 1] == " ")):
-                        bigram_weight *= 2 * bigrFreq  # Extra weight for start of word
-                    elif position == len(string) - 2 or (position < len(string) - 2 and string[position + 2] == " "):
-                        bigram_weight *= 2 * bigrFreq  # Extra weight for end of word
-                    else:
-                        bigram_weight *= bigrFreq
-                    all_ngrams.append(bigram)
-                    all_weights.append(bigram_weight)
-                    all_locations.append([position, position + i])
-            else:  # Open ngrams
-                if position + i in edge_locations:
-                    bigram_weight *= 2
+                    bigram_weight *= bigrFreq
+            all_ngrams.append(bigram)
+            all_weights.append(bigram_weight)
+            all_locations.append([position, position + i])
+
+        if gap == 0:  # Closed ngrams
+            i=2  # for closed bigrams, add bigram with gap 1 with half weight
+            if position + i >= len(string) or string[position + i] == ' ':
+                break
+            bigram = letter + string[position + i]
+            bigram_weight = weight / 2
+            if position + i in edge_locations:
+                bigram_weight *= 2
+            if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
+                bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
+                bigram_weight *= bigrFreq
                 all_ngrams.append(bigram)
                 all_weights.append(bigram_weight)
                 all_locations.append([position, position + i])
@@ -181,7 +125,7 @@ def get_blank_screen_stimulus(blank_screen_type:str)->str:
     stimulus = None
 
     if blank_screen_type == 'blank':
-        stimulus = ""
+        stimulus = " "
 
     elif blank_screen_type == 'hashgrid':
         stimulus = "#####"  # NV: overwrite stimulus with hash grid
@@ -362,7 +306,7 @@ def calc_monogram_attention_sum(position_start:int,
                                 is_fixated_word:bool)->float:
 
     """
-    Compute attention of word to the right of the fixated word.
+    Compute attention of word to the right of fixated word. Only used to calculate target of forward saccade
 
     :param position_start: the index of the first letter of the word.
     :param position_end: the index of the last letter of the word.
@@ -375,8 +319,6 @@ def calc_monogram_attention_sum(position_start:int,
     :return:
     """
 
-    # this is only used to calculate where to move next when forward saccade
-    # MM: turns out this can be seriously simplified: the weightmultiplier code can go, and the eccentricity effect.
     sum_attention_letters = 0
 
     # AL: make sure letters to the left of fixated word are not included
@@ -384,25 +326,12 @@ def calc_monogram_attention_sum(position_start:int,
         position_start = eye_position + 1
 
     for letter_location in range(position_start, position_end+1):
-        #monogram_locations_weight_multiplier = 1  #was .5. Changed to 1. What happens when attentwgt not influenced by edges (which increases wgt of small words)
-        #if foveal_word:
-        #    if letter_location == position_end:
-        #        monogram_locations_weight_multiplier = 1. # 2.
-        #elif letter_location in [position_start, position_end]:
-        #    monogram_locations_weight_multiplier = 1. # 2.
 
         # Monogram activity depends on distance of monogram letters to the centre of attention and fixation
         attention_eccentricity = letter_location - attention_position
-        # eye_eccentricity = abs(letter_location - eye_position)
-        # print(attention_eccentricity, eye_eccentricity)a
         attention = get_attention_skewed(attend_width, attention_eccentricity, attention_skew)
-        #visual_acuity = 1 # calc_acuity(eye_eccentricity, let_per_deg)
-        sum_attention_letters += attention #* visual_acuity) * monogram_locations_weight_multiplier
+        sum_attention_letters += attention
         #print(f'     letter within-word position: {letter_location}, '
-        #      f'ecc: {attention_eccentricity}, '
-        #      f'att-based input: {attention}, '
-        #      f'visual acc {visual_acuity}, '
-        #      f'visual input: {(attention * visual_acuity) * monogram_locations_weight_multiplier}')
 
     return sum_attention_letters
 

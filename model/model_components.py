@@ -6,8 +6,7 @@ import math
 import warnings
 import pandas as pd
 
-from model.reading_helper_functions import get_blank_screen_stimulus
-from reading_helper_functions import string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
+from reading_helper_functions import get_blank_screen_stimulus, string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
     get_midword_position_for_surrounding_word, calc_word_attention_right, calc_saccade_error, define_slot_matching_order, \
     find_word_edges, sample_from_norm_distribution
 
@@ -69,67 +68,6 @@ def compute_eye_position(stimulus:str, fixated_position_stimulus:int, eye_positi
 
     return int(np.round(eye_position))
 
-# def compute_ngram_activity(stimulus:str,
-#                            eye_position:int,
-#                            attention_position:int,
-#                            attend_width:float,
-#                            let_per_deg:float,
-#                            attention_skew:float,
-#                            gap:int,
-#                            recognition_in_stimulus:list[int],
-#                            tokens:list,
-#                            recognized_word_at_cycle:np.ndarray[int],
-#                            n_cycles:int)->dict:
-#
-#     """
-#     Initialize word activity based on ngram excitatory input.
-#
-#     :param stimulus: the tokens the model is processing in parallel.
-#     :param eye_position: the index of the character the eyes are fixating at in the stimulus.
-#     :param attention_position: the index of the character where the focus of attention is located in the stimulus.
-#     :param attend_width: how long the attention window should be when processing the input stimulus.
-#     :param let_per_deg: used to calculate visual acuity, which is then used to compute attention.
-#     :param attention_skew: used in the formula to compute attention. How skewed attention should be to the right of the fixation point. 1 equals symmetrical distribution.
-#     :param gap: the number of characters between two characters allowed to still form a bi-gram.
-#     :param recognition_in_stimulus: list of word indices that have been recognized in stimulus.
-#     :param tokens: the input text tokens.
-#     :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
-#     :param n_cycles: how many processing cycles have already occurred in current fixation.
-#
-#     :return: dict with ngram as keys and excitatory input as value.
-#     """
-#
-#     unit_activations = {}
-#     # define the word ngrams, its weights and their location within the word
-#     all_ngrams, all_weights, all_locations = string_to_ngrams(stimulus, gap)
-#     fix_ngrams = []
-#
-#     if len(recognition_in_stimulus) > 0 and len(tokens) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
-#         for i in recognition_in_stimulus:
-#             # AL: a hack to avoid recognized words to be too active and be matched to subsequent positions too!
-#             # after recognition, 200ms block on activation (= 8 act cycles)
-#             if n_cycles - recognized_word_at_cycle[i] <= 8:
-#                 ngrams, weights, locations = string_to_ngrams(tokens[i], gap)
-#                 fix_ngrams.extend(ngrams)
-#                 # print(tokens[i], n_cycles, recognition_cycle[i], ngrams)
-#
-#     for ngram, weight, location in zip(all_ngrams, all_weights, all_locations):
-#         # remove activation of ngrams from recognized words for the next 8 act cycles after recognition
-#         if ngram in fix_ngrams:
-#             activation = 0.0
-#         else:
-#             activation = cal_ngram_exc_input(location, weight, eye_position, attention_position,
-#                                              attend_width, let_per_deg, attention_skew)
-#         # AL: a ngram that appears more than once in the simulus
-#         # will have the activation from the ngram in the position with highest activation
-#         if ngram in unit_activations.keys():
-#             unit_activations[ngram] = max(unit_activations[ngram], activation)
-#         else:
-#             unit_activations[ngram] = activation
-#     # print(unit_activations)
-#
-#     return unit_activations
-
 def compute_ngram_activity(stimulus:str,
                            eye_position:int,
                            attention_position:int,
@@ -153,10 +91,11 @@ def compute_ngram_activity(stimulus:str,
     :param let_per_deg: used to calculate visual acuity, which is then used to compute attention.
     :param attention_skew: used in the formula to compute attention. How skewed attention should be to the right of the fixation point. 1 equals symmetrical distribution.
     :param gap: the number of characters between two characters allowed to still form a bi-gram.
-    :param recognition_in_stimulus: list of word indices that have been recognized in stimulus.
+    :param recognition_in_stimulus: list of len(tokens) with per token the cycle in which it was recognized (not recognized=-1).
     :param tokens: the input text tokens.
     :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
     :param n_cycles: how many processing cycles have already occurred in current fixation.
+    :param bigramFrame: contains list of bigrams & their frequencies in the language
 
     :return: dict with ngram as keys and excitatory input as value.
     """
@@ -221,6 +160,7 @@ def compute_words_input(stimulus:str,
     :param tokens: the input text tokens.
     :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
     :param n_cycles: how many processing cycles have already occurred in current fixation.
+    :param bigramFrame: contains list of bigrams & their frequencies in the language
 
     :return: word_input (np.ndarray) with the resulting activity for each word in the lexicon,
     all_ngrams (list) with the number of ngrams per word in the lexicon,
@@ -261,7 +201,7 @@ def compute_words_input(stimulus:str,
     all_ngrams = [len(ngrams) for ngrams in lexicon_word_ngrams.values()]
     word_input = word_input / (np.array(all_ngrams) + pm.discounted_ngrams)
 
-    return n_ngrams, total_ngram_activity, all_ngrams, word_input
+    return n_ngrams, total_ngram_activity, word_input
 
 def update_word_activity(lexicon_word_activity:np.ndarray[float],
                          word_inhibition_matrix:np.ndarray[float],
@@ -909,7 +849,7 @@ class FixationProcessor:
         self.recognized_word_at_position = np.empty(len(reader.tokens),
                                                     dtype=object)  # recognized word at position, which word received the highest activation in each position
         self.recognized_word_at_cycle = np.zeros(len(reader.tokens),
-                                                 dtype=int)  # the amount of cycles needed for each word in text to be recognized
+                                                 dtype=int)  # the nr. of cycles needed for each word in text to be recognized
         self.recognized_word_at_cycle.fill(-1)  # initial state no words are recognized yet
         self.output = FixationOutput(reader) # initialize fixation output
 
@@ -978,7 +918,7 @@ class FixationProcessor:
                                      fixated_word_threshold = self.reader.model.recognition_thresholds[fixated_word_index])
 
         # ---------------------- Define word excitatory input ---------------------
-        n_ngrams, total_ngram_activity, all_ngrams, word_input = compute_words_input(self.stimulus,
+        n_ngrams, total_ngram_activity, word_input = compute_words_input(self.stimulus,
                                                                                      self.reader.model.lexicon_word_ngrams,
                                                                                      self.eye_position,
                                                                                      self.attention_position,
@@ -1002,7 +942,7 @@ class FixationProcessor:
             # AL: it used to be that we would only remove activation of recognized words until attention shifted.
             # AL: but then we would get too many repetitions (not enough removal of activation; same word getting recognized in the subsequent position)
 
-                n_ngrams, total_ngram_activity, all_ngrams, word_input = compute_words_input(self.stimulus,
+                n_ngrams, total_ngram_activity, word_input = compute_words_input(self.stimulus,
                                                                                              self.reader.model.lexicon_word_ngrams,
                                                                                              self.eye_position,
                                                                                              self.attention_position,
@@ -1094,7 +1034,7 @@ class FixationProcessor:
                     # attention_position may be zero if it's in the first character of the stimulus
                     if self.attention_position is not None:
                         # AL: recompute word input, using ngram excitation and inhibition, because attentshift changes bigram input
-                        n_ngrams, total_ngram_activity, all_ngrams, word_input = compute_words_input(self.stimulus,
+                        n_ngrams, total_ngram_activity, word_input = compute_words_input(self.stimulus,
                                                                                                      self.reader.model.lexicon_word_ngrams,
                                                                                                      self.eye_position,
                                                                                                      self.attention_position,
@@ -1275,71 +1215,95 @@ def run_lexdecis(model,
 
     n_cycle = 1  # counter for cycles
     recog_cycle = n_cycle
-    ## FIXME: for whatever reason, task.blank_screen_cycles_begin and blank_screen_cycles_end are tuples instead of int
-    totalcycles = task.blank_screen_cycles_begin[0] + task.prime_cycles + task.stim_cycles + task.blank_screen_cycles_end[0]
+    totalcycles = task.blank_screen_cycles_begin + task.prime_cycles + task.stim_cycles + task.blank_screen_cycles_end
+    print(f'N cycles: {totalcycles}')
     false_guess, decision = False, False
     # init activity matrix with min activity. Assumption that each trial is independent.
-    lexicon_word_activity = np.zeros((len(model.lexicon)), dtype=float)
-    lexicon_word_activity[:] = model.min_activity
+    word_activities = np.zeros((len(model.lexicon)), dtype=float)
+    word_activities[:] = model.min_activity
+    recognition_in_stimulus = []    # list to which indices of recogn words will be appended
+    recognized_word_at_cycle = []   # list of recogn. wrds whose ngrams are discounted; irrelevant in lex decis.
+    tokens =[]      # list of words in text, irrelevant in lex decis
+    # stimulus_matched_slots keeps track of which words have been recognized in the stimulus
+    # create it if first stimulus or a changed one but only if more than 1 letter
+    if len(stim_positions) <= 1:
+        stimulus_matched_slots = np.empty(len(stimulus.split()), dtype=object)
+
     decision_threshold = 0.0
     A1 = 0.0
     A2 = 0.0
 
+    trial_data = pd.DataFrame(columns=["ngram act", "n active ngrams", "max word act", "tot lex act"])  # data from trial
     # keep processing stimuli as long as trial lasts
     while n_cycle < totalcycles:
 
         # stimulus changes within a trial to blankscreen, prime
-        if n_cycle < task.blank_screen_cycles_begin[0]:
+        if n_cycle < task.blank_screen_cycles_begin:
             stimulus = get_blank_screen_stimulus(task.blank_screen_type)
-        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles-1):
+        elif n_cycle < (task.blank_screen_cycles_begin + task.prime_cycles-1):
             # if priming expt, do cycles with prime. If not, no n_cycle fulfills this condition & not previous one
             stimulus = prime
-        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles):
+        elif n_cycle < (task.blank_screen_cycles_begin + task.prime_cycles):
             # use last prime cycle to present mask
             stimulus =  get_blank_screen_stimulus('hashgrid')
-        elif n_cycle < (task.blank_screen_cycles_begin[0] + task.prime_cycles + task.stim_cycles):
+        elif n_cycle < (task.blank_screen_cycles_begin + task.prime_cycles + task.stim_cycles):
             stimulus = text
         else:
             stimulus = get_blank_screen_stimulus(task.blank_screen_type)
 
+        print(f'On cycle {n_cycle} stim={stimulus}.')
         eye_position = math.floor(len(stimulus) // 2)
         attention_position = eye_position
         stim_positions = [i for i in range(0, len(stimulus.split(' ')))] # = [0, 1, 2, 3, 4]
         fixated_position_in_stim = math.floor(len(stimulus.split(' ')) / 2)
 
-        # stimulus_matched_slots keeps track of which words have been recognized in the stimulus
-        # create it if first stimulus or a changed one but only if more than 1 letter
-        if len(stim_positions) <= 1:
-            stimulus_matched_slots = np.empty(len(stimulus.split()), dtype=object)
-
         # define order for slot matching. Computed within cycle loop bcs stimulus may change within trial
-        order_match_check = define_slot_matching_order(len(stimulus.split(' ')), fixated_position_in_stim, attend_width)
+        order_match_check = define_slot_matching_order(len(stimulus.split(' ')), fixated_position_in_stim, model.attend_width)
 
         # compute word excitatory input given stimulus
-        n_ngrams, total_ngram_activity, all_ngrams, word_input = compute_words_input(stimulus,
-                                                                                     lexicon_word_ngrams,
-                                                                                     eye_position,
-                                                                                     attention_position,
-                                                                                     attend_width,
-                                                                                     pm,
-                                                                                     word_frequencies,
-                                                                                     bigramFrame)
-
-        trial_data['total ngram act per cycle'].append(total_ngram_activity)
-        # trial_data['ngrams'].append(ngrams_identity)
-        # trial_data['n of ngrams per cycle'].append(len(all_ngrams))
+        n_ngrams, total_ngram_activity, word_input = compute_words_input(stimulus,
+                                                                         model.lexicon_word_ngrams,
+                                                                         eye_position,
+                                                                         attention_position,
+                                                                         model.attend_width,
+                                                                         model,
+                                                                         model.frequency_values,
+                                                                         recognition_in_stimulus,
+                                                                         tokens,
+                                                                         recognized_word_at_cycle,
+                                                                         n_cycle,
+                                                                         model.bigramFrame)
+        if verbose:
+            print(f'Nr of_ngrams in stim: {n_ngrams}.')
+            print(f'Total ngram activity: {total_ngram_activity}.')
 
         # update word activity using word-to-word inhibition and decay
-        lexicon_word_activity, lexicon_word_inhibition = update_word_activity(lexicon_word_activity,
-                                                                              word_inhibition_matrix,
-                                                                              pm,
-                                                                              word_input,
-                                                                              len(lexicon))
+        word_activities, word_inhibitions = update_word_activity(word_activities,
+                                                                    model.word_inhibitions,
+                                                                    model,
+                                                                    word_input)
 
-    fixation_processor.define_stimulus_and_eye_pos(verbose=verbose)
-    fixation_processor.update_attention_width()
-    fixation_processor.output = fixation_processor.fixate(reader.output, verbose=verbose)
-    reader.output.append(fixation_processor.output)
-    end_of_text = fixation_processor.move_fixation(end_of_text, verbose=verbose)
+        max_wrd_act = max(word_activities)
+        tot_wrd_act = sum(word_activities)
+        if verbose:
+            print(f'maxwrdact: {max_wrd_act}.')
+            print(f'sum word act: {tot_wrd_act}.')
+        # columns=["ngram act", "n active ngrams", "max word act", "tot lex act"]
+        trial_data.loc[len(trial_data)]=[total_ngram_activity, n_ngrams, max_wrd_act,tot_wrd_act]
+
+        recognized_word_at_position, word_activities, recognition_in_stimulus = \
+            match_active_words_to_input_slots(order_match_check,
+                                              stimulus,
+                                              recognized_word_at_position,
+                                              word_activities,
+                                              model.lexicon,
+                                              model.min_activity,
+                                              stimulus_position,
+                                              model.word_length_similarity_constant,
+                                              recognition_in_stimulus,
+                                              model.recognition_thresholds,
+                                              verbose=verbose)
+
+        n_cycle = n_cycle + 1    # Now on to next cycle...
 
     return reader.output

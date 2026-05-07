@@ -252,8 +252,8 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 n_total_overlap = len(ngram_common)
                 # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
                 word_1_index, word_2_index = lexicon.index(word1), lexicon.index(word2)
-                # print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
-                #       " ngram overlap ", ngram_common)
+                print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
+                       " ngram overlap ", ngram_common)
                 word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
                     len(lexicon_word_ngrams[word1]))) * length_sim
                 word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
@@ -302,7 +302,7 @@ class ReadingModel:
                  max_activity:float = 1.0,
                  decay:float = -0.10,
                  discounted_ngrams:int = 5,
-                 ngram_gap:int = 2,
+                 ngram_gap:int = 0,
                  max_threshold:float = 0.5,
                  use_threshold:bool = False,
                  freq_weight:float = 0.08,
@@ -336,7 +336,6 @@ class ReadingModel:
                  lexicon_filepath: str = '',
                  matrix_filepath: str = '',
                  matrix_parameters_filepath: str = '',
-                 ngram_frequency_filepath: str = "",
                  include_predicted_without_frequencies: bool = False,
                  save_lexicon: bool = False,
                  save_word_inhibition: bool = False,
@@ -448,7 +447,7 @@ class ReadingModel:
 
         # if ngram gap is 0, load ngram frequencies
         if self.ngram_gap == 0:
-            self.bigramFrame = get_ngram_frequency_from_file(ngram_frequency_filepath, verbose=verbose)
+            self.bigramFrame = get_ngram_frequency_from_file(language, verbose=verbose)
         else:
             self.bigramFrame = None
 

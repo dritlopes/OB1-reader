@@ -1,12 +1,13 @@
+print('Starting to import')
 from model import ReadingModel
 from model_components import FixationOutput
 from evaluation import evaluate, extract_sentences, extract_stimuli
 
 # text ids from eye-tracking corpus
-text_ids = [0,1]
+text_ids = [1,2]
 
-task_name = 'flanker' #'reading'
-language =  'french'  #'english'
+task_name = 'reading' #'reading', 'flanker'
+language =  'english'  #'english', 'dutch', 'german'
 
 print('Starting with ' + task_name + ' in ' + language)
 
