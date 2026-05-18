@@ -1233,6 +1233,8 @@ def run_lexdecis(model,
     error_boost = 0.5 * (1-correct)     # error boost if prev.decision not correct (.5)
     noise_word = np.random.normal(0.0, .02)    # noise added, on this trial, to LBA drift rate (.03)
     noise_nonw = np.random.normal(0.0, .02)    # noise added, on this trial, to LBA drift rate (0.03)
+    word_evidence = 0
+    nonw_evidence = 0
     decis = ""
     RT = -1
 
@@ -1315,8 +1317,11 @@ def run_lexdecis(model,
             recog_RT = recognized_word_at_cycle[fixated_position_in_stim]
 
         if tot_wrd_act > 0 and decis == "":  # only compute LBA if there is act in the lexicon & no decision yet
-            accum_word += max_wrd_act - 0.002 * tot_wrd_act + noise_word
-            accum_nonw += .35 - .35 * max_wrd_act + noise_nonw
+            if n_cycle < task.final_integration_cycle:   # only integrate evid in selected cycles before recall messes it up
+                word_evidence =  max_wrd_act - 0.0005 * tot_wrd_act + noise_word
+                nonw_evidence = .5 - .55 * max_wrd_act + noise_nonw
+            accum_word += word_evidence
+            accum_nonw += nonw_evidence
             if accum_word > decis_bound + error_boost:
                 decis = task.wordcode
                 RT = n_cycle

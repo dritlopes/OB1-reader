@@ -212,5 +212,5 @@ def evaluate_task(output, task, filename):
         print(output.groupby('cond')['correct'].mean())
         print(output.groupby('cond')['LD RT'].mean())
         print(output.groupby('cond')['av. max'].mean())
-        print(output.groupby('cond')['av. tot'].mean())
+        #print(output.groupby('cond')['av. tot'].mean())
         output.to_csv(filename)

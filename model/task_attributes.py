@@ -12,8 +12,13 @@ class TaskAttributes:
         blank_screen_type (str): The type of blank screen in the experiment.
         blank_screen_cycles_begin (int): The number of model processing cycles at which the blank screen should appear.
         blank_screen_cycles_end (int): The number of model processing cycles at which the blank screen should end.
-        is_priming_task (bool): Whether the task has a priming phase.
+        final_integration_cycle (int): The number of model processing cycles used for lexical decision.
         n_cycles_prime_task (int): The number of model processing cycles priming phase.
+        is_priming_task (bool): Whether the task has a priming phase.
+        affix_implemented (bool): Whether affixes should be processed.
+        POS_implemented (bool): Whether part-of-speech should be coded & processed.
+        wordcode, nonwordcode, (str): codes used in stimulus file for words & nonwords.
+        stimcol, wordcol, condcol (str): column names used in stimulus file
     """
     task_name: str = 'reading'
     language: str = 'en'
@@ -23,6 +28,8 @@ class TaskAttributes:
     prime_cycles: int = 0   # add one cycle for mask
     stim_cycles: int = 0
     blank_screen_cycles_end: int = 0
+    final_integration_cycle: int = 0
+    n_cycles_prime_task: int = 0
     is_priming_task: bool = False
     affix_implemented: bool = False
     POS_implemented = False
@@ -51,6 +58,7 @@ class Flanker(TaskAttributes):
     stim_cycles: int = 7+20     # if stim is not masked, its visual activity will slowly decay. 20 extra time steps rough model of that
     blank_screen_cycles_begin: int = 10 # set to low val(10) because such fix cycles don't do anything
     blank_screen_cycles_end: int = 40-20
+    final_integration_cycle: int = blank_screen_cycles_begin+10
 
 @dataclass
 class Transposed(TaskAttributes):

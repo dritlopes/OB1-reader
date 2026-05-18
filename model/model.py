@@ -14,7 +14,7 @@ from model_components import sequence_read, run_lexdecis
 from reading_helper_functions import string_to_ngrams
 import task_attributes
 print('imported to task attrib')
-from utils import get_ngram_frequency_from_file, get_word_freq, pre_process_string, write_out_simulation_data, get_word_pred, return_predicted_tokens
+from utils import get_ngram_frequency_from_file, get_word_freq, pre_process_string #, write_out_simulation_data, get_word_pred, return_predicted_tokens
 print('imported all')
 
 # will create a new file everytime, stamped with date and time
@@ -558,8 +558,8 @@ class ReadingModel:
                                                                             corr,
                                                                             verbose=verbose)
                     corr = (trials.at[i+1,task.wordcol] == LD_decis)
-                    avMax = cycle_data["max word act"][11]  #[10:30].mean()
-                    avTot = cycle_data["tot lex act"][11]   #[10:30].mean()
+                    avMax = cycle_data["max word act"][10:19].mean()
+                    avTot = cycle_data["tot lex act"][10:19].mean()
 
                     if verbose:
                         print(f'    recog. {recog} at {recog_RT-10} with {LD_decis} ({corr}) at {LD_RT-10}.')

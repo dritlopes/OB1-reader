@@ -5,11 +5,11 @@ from evaluation import evaluate, evaluate_task, extract_sentences, extract_stimu
 import task_attributes
 
 # text ids from eye-tracking corpus
-text_ids = range(1, 3) # [1,2]
+text_ids = range(1, 500) # [1,2]
 trials =[]
 
-task_name = 'reading' #'reading', 'flanker'
-language =  'english'  #'english', 'french', 'dutch', 'german'
+task_name = 'flanker' #'reading', 'flanker'
+language =  'french'  #'english', 'french', 'dutch', 'german'
 
 print('Starting with ' + task_name + ' in ' + language)
 
