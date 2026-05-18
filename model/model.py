@@ -1,18 +1,25 @@
 import time
 import numpy as np
+import pandas as pd
 import pickle
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import logging
 from datetime import datetime
 from itertools import combinations
+#from pandas.core.interchange.dataframe_protocol import DataFrame
+print('imported std packages')
+
 from model_components import sequence_read, run_lexdecis
 from reading_helper_functions import string_to_ngrams
 import task_attributes
-from utils import get_ngram_frequency_from_file, write_out_simulation_data, get_word_pred, get_word_freq, pre_process_string, return_predicted_tokens
+print('imported to task attrib')
+from utils import get_ngram_frequency_from_file, get_word_freq, pre_process_string, write_out_simulation_data, get_word_pred, return_predicted_tokens
+print('imported all')
 
 # will create a new file everytime, stamped with date and time
 now = datetime.now()
-dt_string = now.strftime("_%Y_%m_%d_%H-%M-%S")
+dt_string = now.strftime("_%m_%d_%H-%M-%S")
 filename = f'logs/logfile{dt_string}.log'
 if not os.path.isdir('logs'): os.mkdir('logs')
 logging.basicConfig(filename=filename,
@@ -252,8 +259,8 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 n_total_overlap = len(ngram_common)
                 # MM: now inhib set as proportion of overlapping bigrams (instead of nr overlap);
                 word_1_index, word_2_index = lexicon.index(word1), lexicon.index(word2)
-                print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
-                       " ngram overlap ", ngram_common)
+                #print("word1 ", word1, "word2 ", word2, "length sim", length_sim, "overlap ", n_total_overlap,
+                #       " ngram overlap ", ngram_common)
                 word_inhibition_matrix[word_1_index, word_2_index] = (n_total_overlap / (
                     len(lexicon_word_ngrams[word1]))) * length_sim
                 word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
@@ -297,10 +304,10 @@ class ReadingModel:
                  cycle_size:int = 25,
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
-                 word_inhibition:float = -1.5,
+                 word_inhibition:float = -1.3,
                  min_activity:float = 0.0,
                  max_activity:float = 1.0,
-                 decay:float = -0.10,
+                 decay:float = -0.02,
                  discounted_ngrams:int = 5,
                  ngram_gap:int = 0,
                  max_threshold:float = 0.5,
@@ -479,6 +486,7 @@ class ReadingModel:
              task_name: str = 'reading',
              nr_of_sims: int = 1,
              output_filepath: str = '',
+             trials: pd.DataFrame = None,
              verbose: bool = True,
              **kwargs: object) ->list:
 
@@ -490,6 +498,7 @@ class ReadingModel:
         :param task_name: the task name.
         :param nr_of_sims: how many times the model should read the give text(s).
         :param output_filepath: filepath to save the processed text.
+        :param trials: information on trials necessary to run the model.
         :param verbose: whether to show progress messages in the shell or not.
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
         :return: the simulation output of the model.
@@ -528,23 +537,35 @@ class ReadingModel:
 
         elif task_name == 'embedded_words':
             task = task_attributes.EmbeddedWords(task_name, **kwargs)
-            self.ngram_to_word_excitation = 1.65
+            self.ngram_to_word_excitation = 1
 
         elif task_name == 'flanker':
             task = task_attributes.Flanker(task_name, **kwargs)
             self.attend_width = 15
-            for simulation_id in range(nr_of_sims):
-                simulation_output = []
-                for i in range(len(texts)):
+            self.decay = -0.02
+            self.word_inhibition = -1.3
+
+            corr = False # default false because error leads to slowing& first trial slow
+            trial_data = pd.DataFrame(columns=['sim','stim', 'cond', 'recog wrd','recog RT','LD decis', 'correct','LD RT', 'av. max', 'av. tot'])  # data from trial
+            for simul_id in range(nr_of_sims):
+                for i in range(len(trials)):
+                    stim= trials.at[i+1,task.stimcol]
                     if verbose:
-                        print(f'---Trial {i} with stim {texts[i]}---')
-                    text_output = run_lexdecis(self,
-                                            task,
-                                            texts[i],
-                                            verbose=verbose)
-                    simulation_output.append(text_output)
-                # save output of each simulation
-                output.append(simulation_output)
+                        print(f'---Trial {i} with stim {stim}---')
+                    cycle_data, recog,recog_RT, LD_decis,LD_RT = run_lexdecis(self,
+                                                                            task,
+                                                                            stim,
+                                                                            corr,
+                                                                            verbose=verbose)
+                    corr = (trials.at[i+1,task.wordcol] == LD_decis)
+                    avMax = cycle_data["max word act"][11]  #[10:30].mean()
+                    avTot = cycle_data["tot lex act"][11]   #[10:30].mean()
+
+                    if verbose:
+                        print(f'    recog. {recog} at {recog_RT-10} with {LD_decis} ({corr}) at {LD_RT-10}.')
+                    # now add for the trial recognition & LD outcome + RT, plus counters for simulation and trial
+                    trial_data.loc[len(trial_data)] = [simul_id,stim,trials.at[i+1,task.condcol], recog,recog_RT,LD_decis,corr,LD_RT,avMax,avTot]
+            output = trial_data
 
         elif task_name == 'transposed':
             task = task_attributes.Transposed(task_name, **kwargs)

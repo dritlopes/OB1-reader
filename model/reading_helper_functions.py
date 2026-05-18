@@ -46,20 +46,22 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
             continue
 
         # Determine weight for unigrams
-        weight = 0.5
+        weight = 0.33
         if gap > 0 and position in edge_locations:
-            weight = 1.0
+            weight *= 2.0
             if 0 < position < len(string) - 1 and string[position - 1] == ' ' and string[position + 1] == ' ':
                 # MM: one-letter words are edge on two sides, so extra weight
-                weight = 3.0
+                weight *= 3.0
 
         # Add unigrams
         all_ngrams.append(letter)
         all_weights.append(weight)
         all_locations.append([position])
 
-        # Add bigrams
-        for i in range(1, gap + 1):
+        # Determine weight for bigrams (MM: doubled wgts relative to unigrams because otherwise nonwords get about same input as words)
+        weight = 1
+        max_freq = max(bigramFrame["freq"])
+        for i in range(1, gap + 1 + 1):
             if position + i >= len(string) or string[position + i] == ' ':
                 break
 
@@ -68,28 +70,27 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
             if position + i in edge_locations:
                 bigram_weight *= 2
 
-            if gap == 0:  # Closed ngrams are weighted by their frequency in language
+            if gap == 0:  # Closed ngrams are weighted by sqrt of their relative frequency in language
                 if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
                     bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
-                    bigram_weight *= bigrFreq
+                    bigram_weight *= (bigrFreq / max_freq) ** 0.5
             all_ngrams.append(bigram)
             all_weights.append(bigram_weight)
             all_locations.append([position, position + i])
 
         if gap == 0:  # Closed ngrams
             i=2  # for closed bigrams, add bigram with gap 1 with half weight
-            if position + i >= len(string) or string[position + i] == ' ':
-                break
-            bigram = letter + string[position + i]
-            bigram_weight = weight / 2
-            if position + i in edge_locations:
-                bigram_weight *= 2
-            if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
-                bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
-                bigram_weight *= bigrFreq
-                all_ngrams.append(bigram)
-                all_weights.append(bigram_weight)
-                all_locations.append([position, position + i])
+            if position + i < len(string) and string[position + i] != ' ':
+                bigram = letter + string[position + i]
+                bigram_weight = weight / 2
+                if position + i in edge_locations:
+                    bigram_weight *= 2
+                if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
+                    bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
+                    bigram_weight *= (bigrFreq / max_freq) ** 0.5
+                    all_ngrams.append(bigram)
+                    all_weights.append(bigram_weight)
+                    all_locations.append([position, position + i])
 
     return all_ngrams, all_weights, all_locations
 

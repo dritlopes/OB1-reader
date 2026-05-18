@@ -26,6 +26,11 @@ class TaskAttributes:
     is_priming_task: bool = False
     affix_implemented: bool = False
     POS_implemented = False
+    wordcode: str = 'word'
+    nonwcode: str = 'nonword'
+    stimcol: str = 'stimulus'
+    wordcol: str= 'lexicality'
+    condcol: str = 'condition'
 
 @dataclass
 class EmbeddedWords(TaskAttributes):
@@ -43,9 +48,9 @@ class EmbeddedWords(TaskAttributes):
 class Flanker(TaskAttributes):
 
     task_name: str = 'flanker'
-    stim_cycles: int = 7
-    blank_screen_cycles_begin: int = 40
-    blank_screen_cycles_end: int = 40
+    stim_cycles: int = 7+20     # if stim is not masked, its visual activity will slowly decay. 20 extra time steps rough model of that
+    blank_screen_cycles_begin: int = 10 # set to low val(10) because such fix cycles don't do anything
+    blank_screen_cycles_end: int = 40-20
 
 @dataclass
 class Transposed(TaskAttributes):

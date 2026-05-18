@@ -413,6 +413,7 @@ def get_ngram_frequency_from_file(language, verbose=False):
     filepath = "../data/raw/UTF-8bigram_eng.csv"   # default: english
     sep = ';'
     if language=='french':
+        print("good language?")
         filepath = "../data/raw/bigram_fr.csv"  # french bigram freq.
     if language=='dutch':
         filepath = "../data/raw/bigram_nl.csv"  # dutch bigram freq.
