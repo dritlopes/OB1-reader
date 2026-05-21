@@ -3,19 +3,19 @@ import numpy as np
 import pandas as pd
 import pickle
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import logging
 from datetime import datetime
 from itertools import combinations
 #from pandas.core.interchange.dataframe_protocol import DataFrame
-print('imported std packages')
+# print('imported std packages')
 
-from model_components import sequence_read, run_lexdecis
+from model_components import read_sequence, run_lexdecis
 from reading_helper_functions import string_to_ngrams
 import task_attributes
-print('imported to task attrib')
+# print('imported to task attrib')
 from utils import get_ngram_frequency_from_file, get_word_freq, pre_process_string, write_out_simulation_data, get_word_pred, return_predicted_tokens
-print('imported all')
+# print('imported all')
 
 # will create a new file everytime, stamped with date and time
 now = datetime.now()
@@ -456,9 +456,9 @@ class ReadingModel:
 
         # if ngram gap is 0, load ngram frequencies
         if self.ngram_gap == 0:
-            self.bigramFrame = get_ngram_frequency_from_file(language, verbose=verbose)
+            self.bigram_frame = get_ngram_frequency_from_file(language, verbose=verbose)
         else:
-            self.bigramFrame = None
+            self.bigram_frame = None
 
         # if use predictability but no predictability dict is provided, create predictability dict if texts are provided and if language and pred_source are supported
         if texts and use_predictability and not predictability_values:
@@ -473,7 +473,7 @@ class ReadingModel:
         self.frequency_values = frequency_values
 
         self.lexicon = add_lexicon(self.processed_tokens, lexicon_filepath, frequency_values, predictability_values, include_predicted_without_frequencies, save_lexicon, verbose)
-        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.bigramFrame, self.ngram_gap, verbose)
+        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.bigram_frame, self.ngram_gap, verbose)
         self.recognition_thresholds = add_recognition_thresholds(self.lexicon, self.max_threshold, self.max_activity,
                                                                  self.freq_weight, frequency_values, self.use_threshold, verbose)
         self.word_inhibitions = add_word_inhibition_matrix(self.lexicon, self.lexicon_word_ngrams, matrix_filepath,
@@ -498,7 +498,7 @@ class ReadingModel:
         :param task_name: the task name.
         :param nr_of_sims: how many times the model should read the give text(s).
         :param output_filepath: filepath to save the processed text.
-        :param trials: information on trials necessary to run the model.
+        :param trials: information on trials necessary to run the model for flanker task.
         :param verbose: whether to show progress messages in the shell or not.
         :param kwargs: all parameters from TaskAttributes which can be overwritten by the user.
         :return: the simulation output of the model.
@@ -523,7 +523,7 @@ class ReadingModel:
                 for text_id, text in enumerate(texts):
                     text_tokens = [pre_process_string(token) for token in text.split(' ')]
                     text_tokens = [token for token in text_tokens if token != '']
-                    text_output = sequence_read(self,
+                    text_output = read_sequence(self,
                                                 task,
                                                 text_tokens,
                                                 text_id,

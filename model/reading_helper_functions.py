@@ -2,6 +2,7 @@ import numpy as np
 import math
 import re
 import logging
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +22,26 @@ def get_stimulus_edge_positions(stimulus:str)->list[int]:
 
     return stimulus_word_edge_positions
 
-def string_to_ngrams(string, bigramFrame=None, gap=0):
+def string_to_ngrams(string:str, bigram_frame:pd.DataFrame|None=None, gap:int=0):
     """
     Determine the ngrams the word(s) in the model input activates, their activation weights, and positions in the string.
 
     :param string: word(s) in model input.
-    :param bigramFrame: DataFrame containing bigram frequencies (required for closed ngrams).
+    :param bigram_frame: DataFrame containing bigram frequencies (required for closed ngrams).
     :param gap: the number of characters between two characters allowed to still form a bi-gram.
                 When gap=0, closed ngrams logic is used; otherwise, open ngrams logic is applied.
     :return: the ngrams the word activates, the weights of ngram activation for each ngram, and where they are located in the word.
     """
     all_ngrams, all_weights, all_locations = [], [], []
 
-    if gap==0 and bigramFrame is None:
-        raise ValueError("bigramFrame must be provided for closed ngrams (gap=0)")
+    if gap==0 and bigram_frame is None:
+        raise ValueError("bigram frame must be provided for closed ngrams (gap=0)")
+
+    if bigram_frame is not None:
+        if not isinstance(bigram_frame, pd.DataFrame):
+            raise ValueError("bigram frame must be a pandas DataFrame")
+        elif "bigram" not in bigram_frame.columns or "freq" not in bigram_frame.columns:
+            raise ValueError("dataframe with bigram frequencies must contain 'bigram' and 'freq' columns")
 
     # Preprocess string
     string = " " + string + " "
@@ -60,7 +67,6 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
 
         # Determine weight for bigrams (MM: doubled wgts relative to unigrams because otherwise nonwords get about same input as words)
         weight = 1
-        max_freq = max(bigramFrame["freq"])
         for i in range(1, gap + 1 + 1):
             if position + i >= len(string) or string[position + i] == ' ':
                 break
@@ -71,22 +77,24 @@ def string_to_ngrams(string, bigramFrame=None, gap=0):
                 bigram_weight *= 2
 
             if gap == 0:  # Closed ngrams are weighted by sqrt of their relative frequency in language
-                if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
-                    bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
+                max_freq = max(bigram_frame["freq"])
+                if bigram_frame is not None and (bigram_frame["bigram"] == bigram).any():
+                    bigrFreq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
                     bigram_weight *= (bigrFreq / max_freq) ** 0.5
             all_ngrams.append(bigram)
             all_weights.append(bigram_weight)
             all_locations.append([position, position + i])
 
         if gap == 0:  # Closed ngrams
+            max_freq = max(bigram_frame["freq"])
             i=2  # for closed bigrams, add bigram with gap 1 with half weight
             if position + i < len(string) and string[position + i] != ' ':
                 bigram = letter + string[position + i]
                 bigram_weight = weight / 2
                 if position + i in edge_locations:
                     bigram_weight *= 2
-                if bigramFrame is not None and (bigramFrame["bigram"] == bigram).any():
-                    bigrFreq = bigramFrame.loc[bigramFrame["bigram"] == bigram]["freq"].values[0]
+                if bigram_frame is not None and (bigram_frame["bigram"] == bigram).any():
+                    bigrFreq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
                     bigram_weight *= (bigrFreq / max_freq) ** 0.5
                     all_ngrams.append(bigram)
                     all_weights.append(bigram_weight)
