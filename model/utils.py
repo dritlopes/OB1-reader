@@ -405,13 +405,12 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
             os.makedirs(dir_path)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
-def get_ngram_frequency_from_file(language, verbose=False):
+def get_ngram_frequency_from_file(language, sep:str=';', verbose=False):
 
-    # TODO make sure diff separators are handled
     if verbose:
         print("Ngram gap is set to 0. Attempting to load ngram frequencies...")
     filepath = "../data/raw/UTF-8bigram_eng.csv"   # default: english
-    sep = ';'
+
     if language=='french':
         print("good language?")
         filepath = "../data/raw/bigram_fr.csv"  # french bigram freq.
@@ -421,7 +420,7 @@ def get_ngram_frequency_from_file(language, verbose=False):
         filepath = "../data/raw/bigram_de.csv"  # dutch bigram freq.
 
     if not os.path.exists(filepath):
-        raise FileNotFoundError(f"File {filepath} does not exist trying to get ngram frequencies from file.")
+        raise FileNotFoundError(f"File {filepath} does not exist. Trying to get ngram frequencies from file.")
     else:
         if filepath == '../data/raw/UTF-8bigram_eng.csv':
             if verbose:
