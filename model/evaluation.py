@@ -203,14 +203,15 @@ def evaluate(output:list[list[list[FixationOutput]]], dataset: Literal['provo', 
     sim_df.to_csv(averaged_simulation_output_path)
 
 def evaluate_task(output, task, filename):
-    # print(output.head)
-    if task == 'flanker':
+    #print(output.head)
+    if task == 'lex_decis':
         output['recog'] = output['recog RT'] > -1  # make column for recognition
         print(output.groupby('cond')['recog'].mean())
         outputRecogd = output.loc[output['recog RT'] > -1]      # select trials where there was recognition
         print(outputRecogd.groupby('cond')['recog RT'].mean())   # RTs for recog only when stim is recognized
         print(output.groupby('cond')['correct'].mean())
         print(output.groupby('cond')['LD RT'].mean())
-        print(output.groupby('cond')['av. max'].mean())
-        #print(output.groupby('cond')['av. tot'].mean())
+        #print(output.groupby('cond')['av. max'].mean())
+        print(output.groupby('cond')['av. tot'].mean())
+        print(output.groupby('cond')['word_evidence'].mean())
         output.to_csv(filename)

@@ -70,6 +70,12 @@ def create_freq_dict(language:str, task_words:list[str]|set[str], freq_threshold
         freq_type = 'Zipf'
         word_col = 'Word'
 
+    elif language == 'norwegian':
+        filepath = '../data/raw/NOA_norwegian.txt' # first delete rows with noisy encoding! otherwise encoding error
+        columns_to_use = [0, 2]
+        freq_type = 'Zipf'
+        word_col = 'Word'
+
     else:
         raise NotImplementedError(language + " is not implemented yet. Please choose between English, French, German or Dutch.")
 

@@ -5,24 +5,24 @@ from evaluation import evaluate, evaluate_task, extract_sentences, extract_stimu
 import task_attributes
 
 # text ids from eye-tracking corpus
-text_ids = range(1, 500) # [1,2]
+text_ids = range(0, 100) #
 trials =[]
 
-task_name = 'flanker' #'reading', 'flanker'
-language =  'french'  #'english', 'french', 'dutch', 'german'
+task_name = 'lex_decis' #'reading', 'lex_decis'
+language =  'norwegian'  #'english', 'french', 'dutch', 'german', 'norwegian'
 
 print('Starting with ' + task_name + ' in ' + language)
 
 if task_name== 'reading':
     dataset_name = "provo" # "meco" or "provo"
-    # input text_ids for texting list of sentences in the corpus
+    # input text_ids for texting list of sentences in the corpus (and comment out text_ids if all should be run)
     texts = extract_sentences(dataset_name, text_ids = text_ids)
     # OR just give a list of strings as texts
-elif task_name== 'flanker':
-    dataset_name = "stim_Flanker_French.csv" # name of file in data/raw
-    task = task_attributes.Flanker(task_name) #, **kwargs)
-    # input text_ids for selecting trials
-    trials = extract_stimuli(dataset_name, text_ids = text_ids)
+elif task_name== 'lex_decis':
+    dataset_name = "ziaka25expt1_stim.csv" #stim_Flanker_French_sh.csv" # name of file in data/raw
+    task = task_attributes.Lex_Decis(task_name) #, **kwargs)
+    # input text_ids for selecting trials (and comment out text_ids if all should be run)
+    trials = extract_stimuli(dataset_name) #, text_ids = text_ids)
     # texts has to be just words in lex decis because else the nonwords will be entered into the lexicon
     texts = trials.loc[trials[task.wordcol]==task.wordcode, task.stimcol].to_list()
     print(texts)

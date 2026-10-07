@@ -52,9 +52,18 @@ class EmbeddedWords(TaskAttributes):
     affix_implemented: bool = True
 
 @dataclass
-class Flanker(TaskAttributes):
+class Lex_Decis(TaskAttributes):
 
-    task_name: str = 'flanker'
+    task_name: str = 'lex_decis'
+    stim_cycles: int = 7+20     # if stim is not masked, its visual activity will slowly decay. 20 extra time steps rough model of that
+    blank_screen_cycles_begin: int = 10 # set to low val(10) because such fix cycles don't do anything
+    blank_screen_cycles_end: int = 40-20
+    final_integration_cycle: int = blank_screen_cycles_begin+5
+
+@dataclass
+class Word_Recog(TaskAttributes):
+
+    task_name: str = 'word_recog'
     stim_cycles: int = 7+20     # if stim is not masked, its visual activity will slowly decay. 20 extra time steps rough model of that
     blank_screen_cycles_begin: int = 10 # set to low val(10) because such fix cycles don't do anything
     blank_screen_cycles_end: int = 40-20

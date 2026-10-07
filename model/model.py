@@ -10,7 +10,7 @@ from itertools import combinations
 #from pandas.core.interchange.dataframe_protocol import DataFrame
 # print('imported std packages')
 
-from model_components import read_sequence, run_lexdecis
+from model_components import sequence_read, run_wordrecog
 from reading_helper_functions import string_to_ngrams
 import task_attributes
 # print('imported to task attrib')
@@ -304,7 +304,7 @@ class ReadingModel:
                  cycle_size:int = 25,
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
-                 word_inhibition:float = -1.3,
+                 word_inhibition:float = -1.5,
                  min_activity:float = 0.0,
                  max_activity:float = 1.0,
                  decay:float = -0.02,
@@ -449,6 +449,8 @@ class ReadingModel:
 
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
+        while '' in self.processed_tokens:
+            self.processed_tokens.remove('')
 
         # make sure data directory is created if non-existent
         os.makedirs('../data/raw', exist_ok=True)
@@ -523,7 +525,7 @@ class ReadingModel:
                 for text_id, text in enumerate(texts):
                     text_tokens = [pre_process_string(token) for token in text.split(' ')]
                     text_tokens = [token for token in text_tokens if token != '']
-                    text_output = read_sequence(self,
+                    text_output = sequence_read(self,
                                                 task,
                                                 text_tokens,
                                                 text_id,
@@ -539,32 +541,32 @@ class ReadingModel:
             task = task_attributes.EmbeddedWords(task_name, **kwargs)
             self.ngram_to_word_excitation = 1
 
-        elif task_name == 'flanker':
-            task = task_attributes.Flanker(task_name, **kwargs)
+        elif task_name == 'lex_decis':
+            task = task_attributes.Lex_Decis(task_name, **kwargs)
             self.attend_width = 15
-            self.decay = -0.02
-            self.word_inhibition = -1.3
 
             corr = False # default false because error leads to slowing& first trial slow
-            trial_data = pd.DataFrame(columns=['sim','stim', 'cond', 'recog wrd','recog RT','LD decis', 'correct','LD RT', 'av. max', 'av. tot'])  # data from trial
+            trial_data = pd.DataFrame(columns=['sim','stim', 'cond', 'recog wrd','recog RT','LD decis', 'correct','LD RT', 'av. max', 'av. tot','word_evidence','nonw_evidence'])  # data from trial
             for simul_id in range(nr_of_sims):
                 for i in range(len(trials)):
-                    stim= trials.at[i+1,task.stimcol]
+                    stim= trials.at[i,task.stimcol]
                     if verbose:
                         print(f'---Trial {i} with stim {stim}---')
-                    cycle_data, recog,recog_RT, LD_decis,LD_RT = run_lexdecis(self,
+                    cycle_data, recog,recog_RT, LD_decis,LD_RT = run_wordrecog(self,
                                                                             task,
                                                                             stim,
                                                                             corr,
                                                                             verbose=verbose)
-                    corr = (trials.at[i+1,task.wordcol] == LD_decis)
+                    corr = (trials.at[i,task.wordcol] == LD_decis)
                     avMax = cycle_data["max word act"][11]  #[10:30].mean()
                     avTot = cycle_data["tot lex act"][11]   #[10:30].mean()
+                    word_ev = cycle_data["word_evidence"][11]
+                    nonw_ev = cycle_data["nonw_evidence"][11]
 
                     if verbose:
                         print(f'    recog. {recog} at {recog_RT-10} with {LD_decis} ({corr}) at {LD_RT-10}.')
                     # now add for the trial recognition & LD outcome + RT, plus counters for simulation and trial
-                    trial_data.loc[len(trial_data)] = [simul_id,stim,trials.at[i+1,task.condcol], recog,recog_RT,LD_decis,corr,LD_RT,avMax,avTot]
+                    trial_data.loc[len(trial_data)] = [simul_id,stim,trials.at[i,task.condcol], recog,recog_RT,LD_decis,corr,LD_RT,avMax,avTot,word_ev,nonw_ev]
             output = trial_data
 
         elif task_name == 'transposed':
