@@ -20,8 +20,8 @@ class TaskAttributes:
         wordcode, nonwordcode, (str): codes used in stimulus file for words & nonwords.
         stimcol, wordcol, condcol (str): column names used in stimulus file
     """
+
     task_name: str = 'reading'
-    language: str = 'en'
     n_trials: int = 0
     blank_screen_type: str = 'blank'
     blank_screen_cycles_begin: int = 0

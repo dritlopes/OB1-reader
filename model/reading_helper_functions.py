@@ -445,3 +445,18 @@ def calc_saccade_error(saccade_distance, optimal_distance, sacc_err_scaler, sacc
         saccade_error_norm = np.random.normal(saccade_error, saccade_error_sigma, 1)
 
     return saccade_error_norm
+
+def span_match(target_span, recognized_word, threshold=.3):
+
+    """Compute token-level overlap ratio (Jaccard) between two spans.
+    :param span1: First text span
+    :param span2: Second text span
+    :return: Jaccard similarity between span1 and span2.
+    """
+
+    tokens1 = set(target_span.lower().split())
+    tokens2 = set(recognized_word.lower().split())
+    intersection = tokens1 & tokens2
+    union = tokens1 | tokens2
+    overlap = len(intersection) / len(union)
+    return overlap > threshold

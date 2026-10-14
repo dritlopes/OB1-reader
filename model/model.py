@@ -2,15 +2,12 @@ import time
 import numpy as np
 import pandas as pd
 import pickle
+import json
 import os
-# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import logging
 from datetime import datetime
 from itertools import combinations
-#from pandas.core.interchange.dataframe_protocol import DataFrame
-# print('imported std packages')
-
-from model_components import sequence_read, run_wordrecog
+from model_components import read_sequence, run_wordrecog
 from reading_helper_functions import string_to_ngrams
 import task_attributes
 # print('imported to task attrib')
@@ -34,8 +31,7 @@ def add_lexicon(words:list,
                 frequency_values:dict,
                 predictability_values:dict,
                 include_predicted_without_frequencies:bool,
-                save:bool,
-                verbose:bool) -> list:
+                save:bool) -> list:
 
     """ Creates the lexicon of the model, which is a list holding all words that will be processed in the model.
     The lexicon can be made out of the words in the task stimuli, the most frequent words according
@@ -43,56 +39,41 @@ def add_lexicon(words:list,
 
     :return: lexicon: contains all words to be processed by the model. The model's vocabulary."""
 
-    if verbose: print('Generating lexicon...')
     logger.info('Generating lexicon...')
 
     if os.path.exists(lexicon_filepath):
         with open(lexicon_filepath, 'rb') as infile:
             lexicon = pickle.load(infile)
-        if verbose: print('Lexicon loaded from memory.')
         logger.info('Lexicon loaded from memory.')
 
     else:
 
         if not words:
             words = []
-            if verbose:
-                print('No text words given to lexicon.')
-                logger.info('No text words given to lexicon.')
+            logger.warning('No text words given to lexicon.')
 
         lexicon = set(words)
 
-        if verbose:
-            print(f'Lexicon size including input words: {len(lexicon)}')
         logger.info(f'Lexicon size including input words: {len(lexicon)}')
 
         if not frequency_values:
             frequency_values = {}
-            if verbose:
-                print('No frequency resource given to lexicon.')
-            logger.info('No frequency resource given to lexicon.')
+            logger.warning('No frequency resource given to lexicon.')
 
         lexicon = lexicon | set(frequency_values.keys())
-        if verbose:
-            print(f'Lexicon size including words from frequency resource: {len(lexicon)}')
         logger.info(f'Lexicon size including words from frequency resource: {len(lexicon)}')
 
         if not predictability_values:
             predictability_values = {}
-            if verbose:
-                print('No predictability resource given to lexicon.')
-            logger.info('No predictability resource given to lexicon.')
+            logger.warning('No predictability resource given to lexicon.')
 
         if include_predicted_without_frequencies:
             predicted_tokens = return_predicted_tokens(predictability_values)
-            print(f'{predicted_tokens.difference(lexicon)}')
             lexicon = lexicon | set(predicted_tokens)
-            if verbose:
-                print(f'Lexicon size including words from predictability resource (which are not in frequency resource): {len(lexicon)}')
             logger.info(f'Lexicon size including input words from predictability resource (which are not in frequency resource): {len(lexicon)}')
 
         if not lexicon:
-            raise AttributeError('Please provide words to populate lexicon.')
+            raise AttributeError('Lexicon is empty. Please provide words to populate lexicon.')
 
         lexicon = list(lexicon)
 
@@ -102,26 +83,22 @@ def add_lexicon(words:list,
                 os.makedirs(dir_path)
             with open(lexicon_filepath, 'wb') as outfile:
                 pickle.dump(lexicon, outfile)
-        if verbose:
-            print(f'Successfully created lexicon.')
             if save:
-                print(f"Lexicon saved to {lexicon_filepath}")
+                logger.info(f"Lexicon saved to {lexicon_filepath}")
 
     return lexicon
 
-def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:bool) -> dict:
+def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int) -> dict:
 
     """
     Creates mapping between each word in the lexicon and its ngrams.
     :param lexicon: all words to be processed by the model. The model's vocabulary.
     :param ngram_gap: how many in btw letters still lead to bi-gram.
-    :param verbose: print out step progression.
     :return: lexicon_word_ngrams: contains ngrams each word in the lexicon generates.
     """
 
     if lexicon:
         # AL: mapping between words and ngrams in the lexicon. Which ngrams form each word in the lexicon?
-        if verbose: print('Finding ngrams from lexicon...')
         logger.info('Finding ngrams from lexicon...')
 
         lexicon_word_ngrams = dict()
@@ -132,7 +109,7 @@ def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:
             lexicon_word_ngrams[word] = all_word_ngrams
 
         lexicon_word_ngrams = lexicon_word_ngrams
-        if verbose: print('Lexicon word ngrams created.')
+        logger.info('Lexicon word ngrams created.')
     else:
         raise AssertionError(
             'Lexicon is empty. Create model lexicon first.')
@@ -141,8 +118,7 @@ def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int, verbose:
 
 def add_recognition_thresholds(lexicon:list, max_threshold:float, max_activity:float, freq_weight:float,
                                frequency_values: dict,
-                               use_threshold: bool,
-                               verbose:bool) -> np.ndarray:
+                               use_threshold: bool) -> np.ndarray:
 
     """If use_threshold=true, each word in lexicon gets own thresholds for recognition as in Snell et al. (2018) OB1 version.
     If use_threshold=false or  no model lexicon is present, thresholds equal maximum word threshold set in the model initialization.
@@ -153,11 +129,8 @@ def add_recognition_thresholds(lexicon:list, max_threshold:float, max_activity:f
     :param max_activity: maximum activity a word in the lexicon is allowed to have.
     :param freq_weight: weight frequency has in defining word recognition threshold
     :param frequency_values: contains a frequency value for each word.
-    :param verbose: print out step progression and to know which words from lexicon do not have a frequency value.
     :return lexicon_thresholds: recognition threshold for each word in the lexicon."""
 
-    if verbose:
-        print('\nSetting word recognition thresholds...')
     logger.info('\nSetting word recognition thresholds...')
 
     if lexicon:
@@ -181,18 +154,17 @@ def add_recognition_thresholds(lexicon:list, max_threshold:float, max_activity:f
                     # word_threshold = 0.22 * ((max_frequency/freq_p) - word_frequency) / (max_frequency/freq_p)
                     # AL: alter the size of effect of frequency and pred as a function of length effect on threshold, as in paper
                     # word_threshold = word_threshold * (1 - .61**(-0.44*len(word)))
-                elif verbose:
-                    print(f'Word {word} not in frequency map')
             lexicon_thresholds[i] = word_threshold
-        if verbose: print(f'Successfully set word recognition thresholds.')
+
+        logger.info(f'Successfully set word recognition thresholds.')
+
         return lexicon_thresholds
 
     else:
         raise AttributeError(
             "Lexicon is empty. Create model lexicon by calling add_lexicon() first or provide it as argument when initializing the model.")
 
-def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_filepath:str, matrix_parameters_filepath:str,
-                               verbose:bool, save:bool) -> np.ndarray:
+def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_filepath:str, matrix_parameters_filepath:str, save:bool) -> np.ndarray:
 
     """ Word inhibition matrix of dimensions (lexicon length, lexicon length) determines
     the inhibition activity words have on each other within the lexicon. Only words of similar
@@ -203,12 +175,10 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
     :param lexicon_word_ngrams: ngrams each word in the lexicon generates.
     :param matrix_filepath: path of matrix file.
     :param matrix_parameters_filepath: path of matrix parameter file.
-    :param verbose: print out step progression.
     :param save: save matrix to file.
     :return: word_inhibition_matrix: matrix containing word-to-word inhibition value per pairwise word combination."""
 
-    if verbose: print('Computing word-to-word inhibition matrix...')
-    logger.info('Computing word-to-word inhibition matrix...')
+    logger.info('\nComputing word-to-word inhibition matrix...')
 
     # NV: compare the previous params with the actual ones.
     previous_matrix_usable = False
@@ -230,13 +200,13 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 previous_matrix_usable = True
 
         if previous_matrix_usable:
-            print('Loading previously saved inhibition matrix...')
+            logger.info('Loading previously saved inhibition matrix...')
             with open(matrix_filepath, "rb") as f:
                 word_inhibition_matrix = pickle.load(f)
                 return word_inhibition_matrix
 
     elif not previous_matrix_usable:
-        print('No previous inhibition matrix. Creating one...')
+        logger.info('No previous inhibition matrix. Creating one...')
 
         if lexicon and lexicon_word_ngrams:
 
@@ -280,10 +250,10 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 size_of_file = os.path.getsize(matrix_filepath)
                 with open(matrix_parameters_filepath, "wb") as f:
                     pickle.dump(str(lexicon_word_ngrams) + str(lexicon_size) + str(size_of_file), f)
-            if verbose:
-                print(f'Successfully loaded word-to-word inhibition matrix.')
+                logger.info(f'Successfully loaded word-to-word inhibition matrix.')
                 if save:
-                    print(f'Matrix saved to {matrix_filepath}')
+                    logger.info(f'Matrix saved to {matrix_filepath}')
+
             return word_inhibition_matrix
 
         elif not lexicon:
@@ -294,6 +264,21 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
             raise AttributeError(
                 "Lexicon-ngram mapping is empty. Create mapping by calling add_lexicon_ngram_mapping() first.")
 
+def load_frames(frame_filepath):
+
+    logger.info('\nAttempting to load frames...')
+
+    with open(frame_filepath, "r") as f:
+        frames = json.load(f)
+
+    frames =  frames.get("responses")
+
+    if frames:
+        logger.info('Successfully loaded frames.')
+    else:
+        logger.warning('No frames found. Make sure that the file is in the expected format.')
+
+    return frames
 
 class ReadingModel:
 
@@ -304,7 +289,7 @@ class ReadingModel:
                  cycle_size:int = 25,
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
-                 word_inhibition:float = -1.5,
+                 word_inhibition:float = -1.3,
                  min_activity:float = 0.0,
                  max_activity:float = 1.0,
                  decay:float = -0.02,
@@ -346,6 +331,7 @@ class ReadingModel:
                  include_predicted_without_frequencies: bool = False,
                  save_lexicon: bool = False,
                  save_word_inhibition: bool = False,
+                 frame_filepath: str = '',
                  verbose: bool = True
                  ):
 
@@ -394,10 +380,11 @@ class ReadingModel:
         :param predictability_values: resource with predictability values. If not provided, and use_predictability is True, the model will try to generate predictability values from default resources.
         :param lexicon_filepath: path to lexicon file.
         :param matrix_filepath: path to word inhibition matrix file.
-        :param include_predicted_without_frequencies: whether to include predicted words not in frequency resource.
+        :param include_predicted_without_frequencies: whether to include predicted words in lexicon which are not in the frequency resource.
         :param save_lexicon: whether to write out model lexicon.
         :param save_word_inhibition: whether to write out model word inhibition matrix.
-        :param verbose: whether to show progress bar.
+        :param frame_filepath: path to file with frames parsed from the input text using frame-RAG. Needed to switch on OB1-frame. See https://github.com/dritlopes/text2frames for the expected file format.
+        :param verbose: whether to print progress on the terminal.
         """
 
         self.texts = texts
@@ -449,8 +436,6 @@ class ReadingModel:
 
         self.tokens = [text.split(' ') for text in texts]
         self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
-        while '' in self.processed_tokens:
-            self.processed_tokens.remove('')
 
         # make sure data directory is created if non-existent
         os.makedirs('../data/raw', exist_ok=True)
@@ -458,31 +443,57 @@ class ReadingModel:
 
         # if ngram gap is 0, load ngram frequencies
         if self.ngram_gap == 0:
-            self.bigram_frame = get_ngram_frequency_from_file(language, verbose=verbose)
+            self.bigram_frame = get_ngram_frequency_from_file(language)
         else:
             self.bigram_frame = None
 
-        # if use predictability but no predictability dict is provided, create predictability dict if texts are provided and if language and pred_source are supported
+        # if use predictability but no predictability dict is provided, create predictability dict (or loaded it in if already exists by giving the filepath) if texts are provided and if language and pred_source are supported
         if texts and use_predictability and not predictability_values:
-            predictability_values = get_word_pred(texts, language=language, pred_source=pred_source, pred_threshold=pred_threshold, topk=top_k, output_word_pred_map=predictability_filepath, verbose=verbose)
+            predictability_values = get_word_pred(texts, language=language,
+                                                  pred_source=pred_source,
+                                                  pred_threshold=pred_threshold,
+                                                  topk=top_k,
+                                                  output_word_pred_map=predictability_filepath)
         self.predictability_values = predictability_values
 
-        # if use frequency but not frequency dict is provided, create frequency dict with default resources if language is supported
+        # if use frequency but not frequency dict is provided, create frequency dict (or load it if it already exists by giving the filepath) with default resources if language is supported
         if use_frequency and not frequency_values:
-            input_words = None
-            if self.tokens: input_words = self.processed_tokens
-            frequency_values = get_word_freq(words=input_words, language=language, word_predictability=self.predictability_values, output_word_frequency_map=frequency_filepath, verbose=verbose)
+            frequency_values = get_word_freq(words=self.processed_tokens,
+                                             language=language,
+                                             word_predictability=self.predictability_values,
+                                             output_word_frequency_map=frequency_filepath)
         self.frequency_values = frequency_values
 
-        self.lexicon = add_lexicon(self.processed_tokens, lexicon_filepath, frequency_values, predictability_values, include_predicted_without_frequencies, save_lexicon, verbose)
-        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(self.lexicon, self.bigram_frame, self.ngram_gap, verbose)
-        self.recognition_thresholds = add_recognition_thresholds(self.lexicon, self.max_threshold, self.max_activity,
-                                                                 self.freq_weight, frequency_values, self.use_threshold, verbose)
-        self.word_inhibitions = add_word_inhibition_matrix(self.lexicon, self.lexicon_word_ngrams, matrix_filepath,
-                                                           matrix_parameters_filepath, verbose, save_word_inhibition)
+        self.lexicon = add_lexicon(words=self.processed_tokens,
+                                   lexicon_filepath=lexicon_filepath,
+                                   frequency_values=frequency_values,
+                                   predictability_values=predictability_values,
+                                   include_predicted_without_frequencies=include_predicted_without_frequencies,
+                                   save=save_lexicon)
+
+        self.lexicon_word_ngrams = add_lexicon_ngram_mapping(lexicon=self.lexicon,
+                                                             bigramFrame=self.bigram_frame,
+                                                             ngram_gap=self.ngram_gap)
+
+        self.recognition_thresholds = add_recognition_thresholds(lexicon=self.lexicon,
+                                                                 max_threshold=self.max_threshold,
+                                                                 max_activity=self.max_activity,
+                                                                 freq_weight=self.freq_weight,
+                                                                 frequency_values=frequency_values,
+                                                                 use_threshold=self.use_threshold)
+
+        self.word_inhibitions = add_word_inhibition_matrix(lexicon=self.lexicon,
+                                                           lexicon_word_ngrams=self.lexicon_word_ngrams,
+                                                           matrix_filepath=matrix_filepath,
+                                                           matrix_parameters_filepath=matrix_parameters_filepath,
+                                                           save=save_word_inhibition)
+
+        self.frames = load_frames(frame_filepath)
 
         time_elapsed = time.perf_counter() - start_time
-        if verbose: print("Time elapsed: " + str(int(time_elapsed)) + " seconds.")
+
+        logger.info("Time elapsed: " + str(int(time_elapsed)) + " second(s).")
+        logger.info('Model ready.')
 
     def read(self, texts: list[str] = None,
              task_name: str = 'reading',
@@ -525,7 +536,7 @@ class ReadingModel:
                 for text_id, text in enumerate(texts):
                     text_tokens = [pre_process_string(token) for token in text.split(' ')]
                     text_tokens = [token for token in text_tokens if token != '']
-                    text_output = sequence_read(self,
+                    text_output = read_sequence(self,
                                                 task,
                                                 text_tokens,
                                                 text_id,

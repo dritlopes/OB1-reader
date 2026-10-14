@@ -4,13 +4,13 @@ import numpy as np
 import chardet
 import json
 import re
-#from transformers import GPT2LMHeadModel, GPT2Tokenizer
-#from transformers import LlamaForCausalLM, LlamaTokenizer
-#import torch
-from model_components import semantic_processing
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import LlamaForCausalLM, LlamaTokenizer
+import torch
+from model_components import semantic_processing, FixationOutput
 from collections import defaultdict
 from typing import Literal
-import codecs
+from copy import deepcopy
 
 def pre_process_string(string, remove_punctuation=True, all_lowercase=True, strip_spaces=True):
 
@@ -159,9 +159,9 @@ def get_word_freq(words:list[str]|set[str]=None, language:str='english', output_
             if verbose:
                 print(f"Adding predicted words to frequency dictionary...")
             frequency_predicted_tokens = create_freq_dict(language, predicted_tokens, n_high_freq_words=0, verbose=True)
-            word_freq_dict.update(frequency_predicted_tokens)
             if verbose:
                 print(f"{len(set(frequency_predicted_tokens.keys()).difference(set(word_freq_dict.keys())))} words were added to frequency dictionary.")
+            word_freq_dict.update(frequency_predicted_tokens)
         else:
             if verbose:
                 print("No predicted words were found to add to frequency dictionary. Using only words from input text(s) and/or top most frequent words from frequency resource.")
@@ -308,7 +308,7 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
     """
 
     if verbose:
-        print(f"Attempting to load predictability values using {pred_source}...")
+        print(f"\nAttempting to load predictability values using {pred_source}...")
 
     # AL: if filepath is given and if predictability map exists there, just read it in
     if output_word_pred_map and os.path.exists(output_word_pred_map):
@@ -328,7 +328,7 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
             json.dump(word_pred_dict, f, ensure_ascii=False)
 
     if verbose:
-        print(f"Successfully loaded predictability values. Saved to {output_word_pred_map}")
+        print(f"Successfully loaded predictability values stored in {output_word_pred_map}")
         print()
 
     return word_pred_dict
@@ -411,14 +411,37 @@ def write_out_simulation_data(simulation_data:list[list]|list, outfile_sim_data:
             os.makedirs(dir_path)
         simulation_results_df.to_csv(outfile_sim_data, sep='\t', index=False)
 
+def from_csv_to_fixation_output(data_filepath):
+
+    """
+    convert saved output in csv file to list of FixationOutput objects.
+    :param data_filepath: saved output in csv.
+    :return: for each simulation and each text, a list of FixationOutput objects.
+    """
+
+    output = pd.read_csv(data_filepath, sep='\t')
+    all_outputs = []
+
+    for simulation_id, all_fixations in output.groupby('simulation_id'):
+        simulation_output = []
+        for text_id, text_fixations in all_fixations.groupby('text_id'):
+            text_output = []
+            for _, fixation in text_fixations.iterrows():
+                # convert each fixation series into a dict and then convert this dict into FixationOutput object
+                fixation_output = FixationOutput().from_dict(fixation.to_dict())
+                text_output.append(fixation_output)
+            simulation_output.append(text_output)
+        all_outputs.append(simulation_output)
+
+    return all_outputs
+
 def get_ngram_frequency_from_file(language, sep:str=';', verbose=False):
 
     if verbose:
-        print("Ngram gap is set to 0. Attempting to load ngram frequencies...")
+        print("\nNgram gap is set to 0. Attempting to load ngram frequencies...")
     filepath = "../data/raw/UTF-8bigram_eng.csv"   # default: english
 
     if language=='french':
-        print("good language?")
         filepath = "../data/raw/bigram_fr.csv"  # french bigram freq.
     if language=='dutch':
         filepath = "../data/raw/bigram_nl.csv"  # dutch bigram freq.
@@ -431,10 +454,73 @@ def get_ngram_frequency_from_file(language, sep:str=';', verbose=False):
         if filepath == '../data/raw/UTF-8bigram_eng.csv':
             if verbose:
                 print("Loading from default ngram frequency file: ../data/raw/UTF-8bigram_eng.csv")
-                print()
         data = pd.read_csv(filepath, sep=sep)
-        if verbose: print('Successfully loaded ngram frequencies.')
+        if verbose: print('Successfully loaded ngram frequencies')
     # assert that column 'bigram' and column 'freq' exist
     assert 'bigram' in data.columns and 'freq' in data.columns, f"Columns 'bigram' and 'freq' must exist in the file {filepath}."
 
     return data
+
+def extract_sentences(dataset: Literal['provo', 'meco'], data_dir: str = None, text_ids: list[int] = None)-> list[str]:
+    """
+    Extract texts/sentences from eye-tracking corpus. Supported corpora: meco and provo.
+    :param dataset: meco or provo.
+    :param data_dir: filepath to corpus data with read texts
+    :param text_ids: if only a subset of the texts is needed, specify which text ids (type: list[int]).
+    :return: list of extracted sentences (list[str])
+    """
+
+    if dataset == 'provo':
+        if data_dir is None:
+            data_dir = "../data/raw/Provo_Corpus-Eyetracking_Data.csv"
+        text_level_id_label = "Text_ID"
+        word_level_id_label = "IA_ID"  # word level id
+        word_content_label = "IA_LABEL"
+        sep = ""
+
+    elif dataset == 'meco':
+        if data_dir is None:
+            data_dir = "../data/raw/joint_data_trimmed.csv"
+        text_level_id_label = "itemid"
+        word_level_id_label = "ianum"
+        word_content_label = "ia"
+        sep = " "
+
+    else:
+        raise NotImplementedError("Parameter `dataset` must be either `provo` or `meco`.")
+
+    texts = []
+
+    if os.path.exists(data_dir):
+        df_original = pd.read_csv(data_dir)
+    else:
+        raise FileNotFoundError(f"File {data_dir} does not exist. Please provide a valid path to the eye tracking corpus.")
+
+    if dataset == 'meco':
+        df_original = df_original[df_original['lang'] == 'en']
+
+    if text_ids is None:
+        text_ids = list(df_original[text_level_id_label].unique())
+
+    for text_id in text_ids:
+        df = deepcopy(df_original[df_original[text_level_id_label] == text_id])
+        df = df.groupby(word_level_id_label).agg({
+            word_content_label: "first"
+        }).reset_index()
+        texts.append(sep.join(list(df[word_content_label])).strip())
+
+    return texts
+
+def extract_stimuli(datafile, data_dir: str=None, text_ids: list[int]=None)->list[str]:
+
+    if data_dir is None:
+        data_dir = "../data/raw/"
+
+    df_original = pd.read_csv(data_dir+datafile, sep=',')
+    #print(df_original.head())
+    if text_ids is None:
+        texts = df_original
+    else:
+        texts = df_original.loc[text_ids]
+
+    return texts

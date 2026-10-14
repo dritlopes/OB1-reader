@@ -221,7 +221,8 @@ class RegressionData:
 
 
 class WordLevelOutput:
-    """Stores all eye-tracking data at the word level.
+
+    """Stores all (simulated) eye-tracking data at the word level.
 
     Attributes:
         word (str): The word being processed.
@@ -231,7 +232,14 @@ class WordLevelOutput:
         regression (RegressionData): Regression-related data.
     """
 
-    def __init__(self, word: str, fixation: FixationData, run: RunData, saccade: SaccadeData, regression: RegressionData, skip_count: int, first_run_fixation_duration: int, fixation_duration: int):
+    def __init__(self, word: str,
+                 fixation: FixationData,
+                 run: RunData, saccade: SaccadeData,
+                 regression: RegressionData,
+                 skip_count: int,
+                 first_run_fixation_duration: int,
+                 fixation_duration: int,
+                 recognized_word_at_position: str = None):
         self.word = word
         self.fixation = fixation
         self.run = run
@@ -240,6 +248,7 @@ class WordLevelOutput:
         self.skip_count = skip_count
         self.first_run_fixation_duration = first_run_fixation_duration
         self.fixation_duration = fixation_duration
+        self.recognized_word_at_position = recognized_word_at_position
     
     @property
     def skip(self):
@@ -336,18 +345,33 @@ class WordLevelStatistics:
         self.incoming_regression_rate = np.mean([
             1 if output.regression.in_count else 0 for output in outputs
         ])
+        self.recognized_word_at_position = None
+
+    def to_dict(self) -> dict:
+        return {
+            "word": self.word,
+            "first_fixation_duration": self.mean_first_fixation_duration,
+            "gaze_duration": self.mean_first_run_fixation_duration,
+            "total_reading_time": self.mean_total_reading_time,
+            "skip": self.skip_rate,
+            "outgoing_regression": self.outgoing_regression_rate,
+            "incoming_regression": self.incoming_regression_rate,
+            "recognized_word_at_position": self.recognized_word_at_position
+        }
 
 def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[WordLevelOutput]:
-    """Converts a sequence of FixationOutput to a sequence of WordLevelOutput, aligning with the format in Provo."""
-    
+
+    """Converts a sequence of FixationOutput to a sequence of WordLevelOutput."""
+
+    # List to store WordLevelOutput instances
     outputs = [WordLevelOutput(
         word,
         FixationData(0,None,None,),
         RunData(0,None,None),
         SaccadeData(None,None,None),
         RegressionData(0,0,0),
-        0,0,0
-    ) for word in words]  # List to store WordLevelOutput instances
+        0,0,0, None
+    ) for word in words]
 
     n = len(fixations)
 
@@ -357,6 +381,7 @@ def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[
         fixation = fixations[i]
         focus = fixation.fixation
         current_max_focus = max(current_max_focus, focus)
+        # check if currently fixated word is also the word we are gathering info on
         assert words[focus]==fixation.fixated_word
 
         if outputs[focus].fixation.count == 0:
@@ -377,28 +402,28 @@ def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[
         outputs[focus].run.total_time += fixation.fixation_duration
 
         if i==n-1:
-            break # no need to deal with the incoming saccade for the last fixation
+            break # no need to deal with the incoming saccade for the last fixation (by H)
 
         next_fixation = fixations[i+1]
         next_focus = next_fixation.fixation
 
         if fixation.saccade_type == 'refixation':
             assert next_focus == focus
-            outputs[focus].run.count -= 1   # revert the count: +1-1=0
+            outputs[focus].run.count -= 1   # revert the count: +1-1=0 (by H)
         else:
-            # TODO: check if refixation counts as one saccade affecting the saccade.first_start/first_end, or not
+            # TODO: check if refixation counts as one saccade affecting the saccade.first_start/first_end, or not (by H)
 
             # update saccade data
             if outputs[next_focus].saccade.first_start is None:
                 outputs[next_focus].saccade.first_start = timestamp+1
                 outputs[next_focus].saccade.first_amplitude = fixation.saccade_distance
             timestamp += abs(int(fixation.saccade_distance*10))
-            # TODO: here we randomly assume a saccade speed of 10, but this may NOT be true.
-            # we need to further read the paper and figure out how the saccade duration & speed is modelled.
+            # TODO: here we randomly assume a saccade speed of 10, but this may NOT be true. (by H)
+            # we need to further read the paper and figure out how the saccade duration & speed is modelled. (by H)
             if outputs[next_focus].saccade.first_end is None:
                 outputs[next_focus].saccade.first_end = timestamp
 
-            # :param saccade_type: the type of incoming saccade: skipping, forward, regression or refixation.
+            # :param saccade_type: the type of incoming saccade: skipping, forward, regression or refixation. (by H)
             if fixation.saccade_type == 'wordskip':
                 assert next_focus > focus+1
                 for j in range(focus+1, next_focus):
@@ -412,10 +437,13 @@ def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[
                 outputs[focus].regression.out_full_count += 1
                 if current_max_focus == focus:
                     outputs[focus].regression.out_count += 1
-            else:
-                print(f"{fixation.saccade_type}")
-                # raise NotImplementedError()
 
-    # df = WordLevelOutput.to_provo_dataframe(outputs)
+    recognized_words = fixations[-1].recognized_words
+    if type(recognized_words) == str:
+        recognized_words = recognized_words.strip('[').strip(']').split(',')
+        recognized_words = [word.replace("'",'').strip() for word in recognized_words]
+    assert len(recognized_words) == len(outputs)
+    for i, word in enumerate(outputs):
+        word.recognized_word_at_position = recognized_words[i]
 
     return outputs
