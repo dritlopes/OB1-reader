@@ -12,7 +12,11 @@ Check out some of the work done as part of this PhD project:
 
 * Lopes Rego, A. T., Snell, J., & Meeter, M. (2025). What determines where readers fixate next? Leveraging NLP to investigate human cognition. In *Proceedings of the First International Workshop on Gaze Data and Natural Language Processing* (pp. 1-6). To reproduce experiments from paper: https://github.com/dritlopes/OB1-reader/tree/contextual_semantic_similarity
 
-* Lopes Rego, A. T., Nogueira, A., & Meeter, M. (2026). What Drives Regressions in Reading? Insights from Surprisal and Saliency from Language Models. \[Manuscript submitted for publication]. To reproduce experiments from paper: https://github.com/dritlopes/modeling_regressions_with_surprisal_and_saliency
+* Lopes Rego, A. T., Nogueira, A., Snell, J., & Meeter, M. (2026). What Drives Regressions in Reading? Insights from Surprisal and Saliency from Language Models. *Cognition, 273, 106535*. To reproduce experiments from paper: https://github.com/dritlopes/modeling_regressions_with_surprisal_and_saliency
+
+* Lopes Rego, A. T., Snell, J., & Meeter, M. (2026). Capturing comprehension during reading: Effects of propositions on eye movements. [Under review].
+
+* Lopes Rego, A. T., Snell, J., & Meeter, M. (2026). Parsing structured semantic knowledge from arbitrary text with GenAI. Preprint available on OSF.
 
 ## How to run the code
 
