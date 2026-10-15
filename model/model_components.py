@@ -335,23 +335,30 @@ def evoke_frame(new_recognized_words, text_frames):
 
     # find if a frame is evoked by the newly recognized words
     evoked_frames = dict()
+    frames = text_frames.get("frames")
 
-    for recognized_word in new_recognized_words:
-        word_frames = []
-        for frame in text_frames["frames"]:
-            # print('Candidate frame: ', frame['name'])
-            # print('Frame evoking word: ', frame['target'])
-            # soft match between target span and recognized word
-            if span_match(frame['target'], recognized_word):
-                word_frames.append(frame['name'])
-        if word_frames:
-            evoked_frames[recognized_word] = word_frames
+    if frames:
 
-    if evoked_frames:
-        # print('Evoked frames: ', evoked_frames)
-        logger.info('Evoked frames: ', evoked_frames)
+        for recognized_word in new_recognized_words:
+            word_frames = []
+            for frame in frames:
+                # print('Candidate frame: ', frame['name'])
+                # print('Frame evoking word: ', frame['target'])
+                # soft match between target span and recognized word
+                if span_match(frame['target'], recognized_word):
+                    word_frames.append(frame['name'])
+            if word_frames:
+                evoked_frames[recognized_word] = word_frames
 
-    return evoked_frames
+        if evoked_frames:
+            # print('Evoked frames: ', evoked_frames)
+            logger.info('Evoked frames: ', evoked_frames)
+
+        return evoked_frames
+
+    else:
+        logger.warning("No frames found in frame resource. Make sure frames are properly loaded into the model and have the required format.")
+        return None
 
 def semantic_processing(tokens:list[str],
                         tokenizer,
@@ -989,11 +996,11 @@ class FixationProcessor:
 
             # ---------------------- Evoke frames ---------------------
             new_recognized_words = set(self.recognized_word_at_position).difference(set(prev_recog_words))
-            if new_recognized_words: # if a new word got recognized
+            if new_recognized_words and self.reader.model.frames: # if a new word got recognized and the model has access to frames
                 # print('Newly recognized word positions: ', new_recognized_positions)
                 logger.info(f'Newly recognized words: {new_recognized_words}')
                 evoked_frames = evoke_frame(new_recognized_words,
-                                            self.reader.model.frames[self.reader.text_id])
+                                            self.reader.model.frames.get(self.reader.text_id))
 
             # ---------------------- Pre-activate predicted words in the stimulus ---------------------
             if self.fixation < len(self.reader.tokens)-1 and self.reader.model.predictability_values:

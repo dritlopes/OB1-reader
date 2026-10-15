@@ -5,6 +5,7 @@ import pickle
 import json
 import os
 import logging
+import string
 from datetime import datetime
 from itertools import combinations
 from model_components import read_sequence, run_wordrecog
@@ -77,6 +78,10 @@ def add_lexicon(words:list,
 
         lexicon = list(lexicon)
 
+        # make sure no empty strings nor punctuations are part of the lexicon
+        lexicon = [word for word in lexicon if word not in string.punctuation and word != "" and word != " "]
+        logger.info(f'Lexicon size after cleaning of empty strings and punctuations: {len(lexicon)}')
+
         if save:
             dir_path = os.path.dirname(lexicon_filepath)
             if dir_path and not os.path.exists(dir_path):
@@ -88,12 +93,13 @@ def add_lexicon(words:list,
 
     return lexicon
 
-def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int) -> dict:
+def add_lexicon_ngram_mapping(lexicon:list, bigram_frame, ngram_gap:int) -> dict:
 
     """
     Creates mapping between each word in the lexicon and its ngrams.
     :param lexicon: all words to be processed by the model. The model's vocabulary.
     :param ngram_gap: how many in btw letters still lead to bi-gram.
+    :param bigram_frame: DataFrame containing bigram frequencies (required for closed ngrams).
     :return: lexicon_word_ngrams: contains ngrams each word in the lexicon generates.
     """
 
@@ -105,7 +111,7 @@ def add_lexicon_ngram_mapping(lexicon:list, bigramFrame, ngram_gap:int) -> dict:
         for i, word in enumerate(lexicon):
             # AL: weights and locations are not used for lexicon,
             # only the ngrams of the words in the lexicon for comparing them later with the ngrams activated in stimulus.
-            all_word_ngrams, weights, locations = string_to_ngrams(word, bigramFrame, ngram_gap)
+            all_word_ngrams, weights, locations = string_to_ngrams(string=word, bigram_frame=bigram_frame, gap=ngram_gap)
             lexicon_word_ngrams[word] = all_word_ngrams
 
         lexicon_word_ngrams = lexicon_word_ngrams
@@ -236,6 +242,7 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
                 word_inhibition_matrix[word_2_index, word_1_index] = (n_total_overlap / (
                     len(lexicon_word_ngrams[word2]))) * length_sim
                 # print("inhib one way", word_overlap_matrix[word_1_index, word_2_index])
+            logger.info('Successfully created inhibition matrix.')
 
             if save:
                 if not matrix_filepath or not matrix_parameters_filepath:
@@ -264,21 +271,34 @@ def add_word_inhibition_matrix(lexicon:list, lexicon_word_ngrams:dict, matrix_fi
             raise AttributeError(
                 "Lexicon-ngram mapping is empty. Create mapping by calling add_lexicon_ngram_mapping() first.")
 
-def load_frames(frame_filepath):
+def load_frames(frame_filepath:str|None=None):
 
     logger.info('\nAttempting to load frames...')
 
-    with open(frame_filepath, "r") as f:
-        frames = json.load(f)
+    if frame_filepath:
 
-    frames =  frames.get("responses")
+        if frame_filepath.endswith('.json'):
 
-    if frames:
-        logger.info('Successfully loaded frames.')
+            with open(frame_filepath, "r") as f:
+                frames = json.load(f)
+
+            frames =  frames.get("responses")
+
+            if frames:
+                logger.info('Successfully loaded frames.')
+                return frames
+
+            else:
+                logger.warning('No frames found. Make sure that the file is in the expected format (higher-level key should be "responses").')
+                return None
+
+        else:
+            logger.warning('Frame filepath given not in json format. Make sure that the file is in the expected format.')
+            return None
+
     else:
-        logger.warning('No frames found. Make sure that the file is in the expected format.')
-
-    return frames
+        logger.warning('No filepath to frames given. Frame evoking module is off.')
+        return None
 
 class ReadingModel:
 
@@ -435,7 +455,7 @@ class ReadingModel:
         start_time = time.perf_counter()
 
         self.tokens = [text.split(' ') for text in texts]
-        self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens]
+        self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens if pre_process_string(token) != '']
 
         # make sure data directory is created if non-existent
         os.makedirs('../data/raw', exist_ok=True)
@@ -472,7 +492,7 @@ class ReadingModel:
                                    save=save_lexicon)
 
         self.lexicon_word_ngrams = add_lexicon_ngram_mapping(lexicon=self.lexicon,
-                                                             bigramFrame=self.bigram_frame,
+                                                             bigram_frame=self.bigram_frame,
                                                              ngram_gap=self.ngram_gap)
 
         self.recognition_thresholds = add_recognition_thresholds(lexicon=self.lexicon,

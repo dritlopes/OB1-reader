@@ -34,7 +34,7 @@ model = ReadingModel(texts=texts,
                      use_predictability=True, # switch on predictability-based pre-activation
                      predictability_filepath="../data/processed/prediction_map_gpt2_english_topkall_0.01.json", # switch on predictability-based pre-activation
                      frequency_filepath='../data/processed/frequency_map_english.json',
-                     frame_filepath='../data/raw/output_FAST.gemma4:31b.json', # switch on frame-based activation
+                     # frame_filepath='../data/raw/output_FAST.gemma4:31b.json', # switch on frame-based activation
                      verbose=True)
 
 # run reading simulation
@@ -42,7 +42,7 @@ output: list[list[list[FixationOutput]]] = model.read(output_filepath=f'../data/
                                                       task_name=task_name,
                                                       nr_of_sims=1,
                                                       trials=trials,
-                                                      verbose=False)
+                                                      verbose=True)
 
 # evaluate model output
 if task_name== 'reading':

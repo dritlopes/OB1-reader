@@ -314,6 +314,10 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
     if output_word_pred_map and os.path.exists(output_word_pred_map):
         with open(output_word_pred_map, "r") as f:
             word_pred_dict = json.load(f)
+        # remove predictions of empty strings (previously punctuations)
+        for key, value in word_pred_dict.items():
+            for position, predictions in value.items():
+                predictions["predictions"] = {k: v for k, v in predictions["predictions"].items() if k != ""}
 
     # AL: if filepath is given, but predictability map does not exist, OR no filepath is given
     else:
@@ -328,8 +332,7 @@ def get_word_pred(texts:[list[str]]=None, language:str='english', output_word_pr
             json.dump(word_pred_dict, f, ensure_ascii=False)
 
     if verbose:
-        print(f"Successfully loaded predictability values stored in {output_word_pred_map}")
-        print()
+        print(f"Successfully loaded predictability values stored in {output_word_pred_map}\n")
 
     return word_pred_dict
 
