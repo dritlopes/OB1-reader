@@ -54,7 +54,7 @@ def string_to_ngrams(string:str, bigram_frame:pd.DataFrame|None=None, gap:int=0)
 
         # Determine weight for unigrams
         weight = 0.33
-        if gap > 0 and position in edge_locations:
+        if position in edge_locations:
             weight *= 2.0
             if 0 < position < len(string) - 1 and string[position - 1] == ' ' and string[position + 1] == ' ':
                 # MM: one-letter words are edge on two sides, so extra weight
@@ -64,41 +64,56 @@ def string_to_ngrams(string:str, bigram_frame:pd.DataFrame|None=None, gap:int=0)
         all_ngrams.append(letter)
         all_weights.append(weight)
         all_locations.append([position])
+        # if string == "school":
+        #     print(position, letter, weight)
 
         # Determine weight for bigrams (MM: doubled wgts relative to unigrams because otherwise nonwords get about same input as words)
-        weight = 1
-        for i in range(1, gap + 1 + 1):
+        for i in range(1, gap + 1 + 1): # 1, 2 if gap == 1; 1 if gap == 0
+            weight = 1
+            # ngrams at ending or starting positions in the word get higher activity
+            if position + i in edge_locations or position in edge_locations:
+                weight *= 2
             if position + i >= len(string) or string[position + i] == ' ':
                 break
-
             bigram = letter + string[position + i]
-            bigram_weight = weight
-            if position + i in edge_locations:
-                bigram_weight *= 2
 
             if gap == 0:  # Closed ngrams are weighted by sqrt of their relative frequency in language
-                max_freq = max(bigram_frame["freq"])
                 if bigram_frame is not None and (bigram_frame["bigram"] == bigram).any():
-                    bigrFreq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
-                    bigram_weight *= (bigrFreq / max_freq) ** 0.5
-            all_ngrams.append(bigram)
-            all_weights.append(bigram_weight)
-            all_locations.append([position, position + i])
+                    max_freq = max(bigram_frame["freq"])
+                    bigr_freq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
+                    weight *= (bigr_freq / max_freq) ** 0.5
 
-        if gap == 0:  # Closed ngrams
-            max_freq = max(bigram_frame["freq"])
-            i=2  # for closed bigrams, add bigram with gap 1 with half weight
+            # Add bigrams
+            all_ngrams.append(bigram)
+            all_weights.append(weight)
+            all_locations.append([position, position + i])
+            # if string == "school":
+            #     print(bigram, i, [position, position + i], weight)
+
+        if gap == 0:  # Closed ngrams - add bigram with gap 1 with half weight
+            i = 2  # bigram with gap 1
+            weight = 1
+            if position in edge_locations or position + i in edge_locations:
+                # weight=1 if internal, 2 if one or both letters edge
+                weight *= 2.0
             if position + i < len(string) and string[position + i] != ' ':
                 bigram = letter + string[position + i]
-                bigram_weight = weight / 2
-                if position + i in edge_locations:
-                    bigram_weight *= 2
+                weight = weight / 2
                 if bigram_frame is not None and (bigram_frame["bigram"] == bigram).any():
-                    bigrFreq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
-                    bigram_weight *= (bigrFreq / max_freq) ** 0.5
+                    max_freq = max(bigram_frame["freq"])
+                    bigr_freq = bigram_frame.loc[bigram_frame["bigram"] == bigram]["freq"].values[0]
+                    weight *= (bigr_freq / max_freq) ** 0.5
                     all_ngrams.append(bigram)
-                    all_weights.append(bigram_weight)
+                    all_weights.append(weight)
                     all_locations.append([position, position + i])
+                    # if string == "school":
+                    #     print(bigram, i, [position, position + i], weight)
+
+    # if string == 'school':
+    #     print(string)
+    #     for ngram, weight in zip(all_ngrams, all_weights):
+    #         print(f'{ngram}: {weight}')
+    #     exit()
 
     return all_ngrams, all_weights, all_locations
 
@@ -293,8 +308,8 @@ def cal_ngram_exc_input(ngram_location:list[int], ngram_weight:float, eye_positi
         attention_eccentricity = letter_position - attention_position
         eye_eccentricity = abs(letter_position - eye_position)
         attention = get_attention_skewed(attend_width, attention_eccentricity, attention_skew)
-        visual_accuity = calc_acuity(eye_eccentricity, let_per_deg)
-        exc_input = attention * visual_accuity
+        visual_acuity = calc_acuity(eye_eccentricity, let_per_deg)
+        exc_input = attention * visual_acuity
         total_exc_input = total_exc_input * exc_input
 
     # AL: if ngram contains more than one letter, total excitatory input is squared
@@ -449,8 +464,6 @@ def calc_saccade_error(saccade_distance, optimal_distance, sacc_err_scaler, sacc
 def span_match(target_span, recognized_word, threshold=.3):
 
     """Compute token-level overlap ratio (Jaccard) between two spans.
-    :param span1: First text span
-    :param span2: Second text span
     :return: Jaccard similarity between span1 and span2.
     """
 
@@ -460,3 +473,78 @@ def span_match(target_span, recognized_word, threshold=.3):
     union = tokens1 | tokens2
     overlap = len(intersection) / len(union)
     return overlap > threshold
+
+def suppress_ngram_activation(bigram_frame: pd.DataFrame | None,
+                              gap:int,
+                              n_cycles: int | None = None,
+                              recognition_in_stimulus: list[int] | None = None,
+                              recognized_word_at_cycle: np.ndarray[int] | None = None,
+                              recognized_word_at_position: np.ndarray[str] | None = None,
+                              stimulus_positions:list|None = None):
+
+    """
+
+    :param gap: the number of characters between two characters allowed to still form a bi-gram.
+    :param bigram_frame: contains list of bigrams & their frequencies in the language
+    :param n_cycles: how many processing cycles have already occurred in current fixation.
+    :param recognition_in_stimulus: list of token indices that have been recognized in stimulus in current fixation. (not recognized=-1).
+    :param recognized_word_at_cycle: which processing cycle each word in the text has been recognized. -1 if word not yet recognized.
+    :param recognized_word_at_position: list of words as they have been recognized in the whole stimulus by the model (wrongly recognized words also possible).
+    :param stimulus_positions: the positions of each word in the current stimulus relative to the word order in the input text (0 to len(tokens)).
+    :return:
+    """
+    # AL: a hack to avoid recognized words to be too active and be matched to other positions too!
+    suppressed_ngrams = []
+    max_n_cycles = 8  # 8, 4
+    arguments = [n_cycles, recognition_in_stimulus, recognized_word_at_cycle, recognized_word_at_position]
+
+    if all(arg is not None for arg in arguments):  # check if all info needed was passed
+
+        # print('recognition_in_stimulus: ', recognition_in_stimulus)
+        # print('recognized_word_at_cycle: ', recognized_word_at_cycle)
+        # print('n_cycles: ', n_cycles)
+        if len(recognition_in_stimulus) > 0 and len(recognized_word_at_cycle) > 0 and n_cycles > -1:
+            # MM: used to have extra constraint that len(tokens)>0, don't know why, deleted it for flanker task
+            for i in recognition_in_stimulus:
+                # after recognition, 200ms block on activation (= max_n_cycles act cycles)
+                # MM: below said 'stimulus' but then input from whole stim canceled. changed to only from recognized word.
+                if n_cycles - recognized_word_at_cycle[i] <= max_n_cycles:
+                    recognized_word = recognized_word_at_position[i]
+                    ngrams, weights, locations = string_to_ngrams(string=recognized_word,
+                                                                  bigram_frame=bigram_frame,
+                                                                  gap=gap)
+                    suppressed_ngrams.extend(ngrams)
+
+        # AL: block activation of words in stimulus which had alredy been recognized in previous fixations
+        if stimulus_positions is not None:
+            if n_cycles > -1 and len(recognized_word_at_position) > 0:
+                # which word positions have been recognized before current fixation and are in the current stimulus
+                recognized_positions_in_stimulus = [pos for pos in stimulus_positions if
+                                                    recognized_word_at_position[pos] and pos not in recognition_in_stimulus]
+                if len(recognized_positions_in_stimulus) > 0:
+                    # print('recognized_word_at_position: ', recognized_word_at_position)
+                    # print('previously recognized word positions in stimulus: ', recognized_positions_in_stimulus)
+                    # if ngrams are part of fixated word which has not yet been recognized, do not block activation from these ngrams
+                    # fixated_ngrams = []
+                    # if not recognized_word_at_position[fixation]:
+                    #     fixated_ngrams, weights, locations = string_to_ngrams(string=fixated_word,
+                    #                                                           bigram_frame=bigram_frame,
+                    #                                                           gap=gap)
+                    for recognized_position in recognized_positions_in_stimulus:
+                        if n_cycles <= max_n_cycles:  # 200 ms block
+                            recognized_word = recognized_word_at_position[recognized_position]
+                            ngrams, weights, locations = string_to_ngrams(string=recognized_word,
+                                                                          bigram_frame=bigram_frame,
+                                                                          gap=gap)
+                            # if fixated_ngrams:
+                            #     ngrams = [ngram for ngram in ngrams if ngram not in fixated_ngrams]
+                            suppressed_ngrams.extend(ngrams)
+    # if len(suppressed_ngrams) > 0:
+    #     print('Ngrams with suppressed activation: ', suppressed_ngrams)
+
+    else:
+        arg_names = ["n_cycles", "recognition_in_stimulus", "recognized_word_at_cycle", "recognized_word_at_position", "stimulus_positions"]
+        empty_args = [arg_name for arg, arg_name in zip(arguments, arg_names) if not arg]
+        logger.warning(f'No ngram activation suppressed, because at least one needed argument was empty: {empty_args}.')
+
+    return suppressed_ngrams

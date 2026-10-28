@@ -377,12 +377,12 @@ def fixation_to_word(words: list[str], fixations: list[FixationOutput]) -> list[
 
     current_max_focus = -1
     timestamp = 0
-    for i in range(n):
+    for i in range(n): # loop through each fixation by model
         fixation = fixations[i]
-        focus = fixation.fixation
+        focus = fixation.fixation # which word position the fixation is on
         current_max_focus = max(current_max_focus, focus)
         # check if currently fixated word is also the word we are gathering info on
-        assert words[focus]==fixation.fixated_word
+        assert words[focus]==fixation.fixated_word, f'Currently fixated word {focus} "{fixation.fixated_word}" not the same as word in eye-tracking "{words[focus]}"'
 
         if outputs[focus].fixation.count == 0:
             outputs[focus].fixation.first_start = timestamp+1

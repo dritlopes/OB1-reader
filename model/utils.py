@@ -423,18 +423,18 @@ def from_csv_to_fixation_output(data_filepath):
     """
 
     output = pd.read_csv(data_filepath, sep='\t')
-    all_outputs = []
+    all_outputs = dict()
 
     for simulation_id, all_fixations in output.groupby('simulation_id'):
-        simulation_output = []
+        simulation_output = dict()
         for text_id, text_fixations in all_fixations.groupby('text_id'):
             text_output = []
             for _, fixation in text_fixations.iterrows():
                 # convert each fixation series into a dict and then convert this dict into FixationOutput object
                 fixation_output = FixationOutput().from_dict(fixation.to_dict())
                 text_output.append(fixation_output)
-            simulation_output.append(text_output)
-        all_outputs.append(simulation_output)
+            simulation_output[text_id] = text_output
+        all_outputs[simulation_id] = simulation_output
 
     return all_outputs
 
@@ -479,7 +479,6 @@ def extract_sentences(dataset: Literal['provo', 'meco'], data_dir: str = None, t
         text_level_id_label = "Text_ID"
         word_level_id_label = "IA_ID"  # word level id
         word_content_label = "IA_LABEL"
-        sep = ""
 
     elif dataset == 'meco':
         if data_dir is None:
@@ -487,7 +486,6 @@ def extract_sentences(dataset: Literal['provo', 'meco'], data_dir: str = None, t
         text_level_id_label = "itemid"
         word_level_id_label = "ianum"
         word_content_label = "ia"
-        sep = " "
 
     else:
         raise NotImplementedError("Parameter `dataset` must be either `provo` or `meco`.")
@@ -510,7 +508,8 @@ def extract_sentences(dataset: Literal['provo', 'meco'], data_dir: str = None, t
         df = df.groupby(word_level_id_label).agg({
             word_content_label: "first"
         }).reset_index()
-        texts.append(sep.join(list(df[word_content_label])).strip())
+        words = [word.strip() for word in list(df[word_content_label])]
+        texts.append(" ".join(words))
 
     return texts
 

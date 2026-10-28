@@ -309,10 +309,10 @@ class ReadingModel:
                  cycle_size:int = 25,
                  ngram_to_word_excitation:float = 1.0,
                  ngram_to_word_inhibition:float = 0.0,
-                 word_inhibition:float = -1.3,
+                 word_inhibition:float = -1.3, # -2.0, -1.5, -1.3
                  min_activity:float = 0.0,
                  max_activity:float = 1.0,
-                 decay:float = -0.02,
+                 decay:float = -0.06, # -0.02, -0.06, -0.08
                  discounted_ngrams:int = 5,
                  ngram_gap:int = 0,
                  max_threshold:float = 0.5,
@@ -454,8 +454,7 @@ class ReadingModel:
         self.time = dt_string
         start_time = time.perf_counter()
 
-        self.tokens = [text.split(' ') for text in texts]
-        self.processed_tokens = [pre_process_string(token) for text_tokens in self.tokens for token in text_tokens if pre_process_string(token) != '']
+        self.tokens = [pre_process_string(token) for text in texts for token in text.split(' ') if pre_process_string(token) != '']
 
         # make sure data directory is created if non-existent
         os.makedirs('../data/raw', exist_ok=True)
@@ -478,13 +477,13 @@ class ReadingModel:
 
         # if use frequency but not frequency dict is provided, create frequency dict (or load it if it already exists by giving the filepath) with default resources if language is supported
         if use_frequency and not frequency_values:
-            frequency_values = get_word_freq(words=self.processed_tokens,
+            frequency_values = get_word_freq(words=self.tokens,
                                              language=language,
                                              word_predictability=self.predictability_values,
                                              output_word_frequency_map=frequency_filepath)
         self.frequency_values = frequency_values
 
-        self.lexicon = add_lexicon(words=self.processed_tokens,
+        self.lexicon = add_lexicon(words=self.tokens,
                                    lexicon_filepath=lexicon_filepath,
                                    frequency_values=frequency_values,
                                    predictability_values=predictability_values,
@@ -516,6 +515,7 @@ class ReadingModel:
         logger.info('Model ready.')
 
     def read(self, texts: list[str] = None,
+             text_ids: list[str] = None,
              task_name: str = 'reading',
              nr_of_sims: int = 1,
              output_filepath: str = '',
@@ -528,6 +528,7 @@ class ReadingModel:
 
         :param texts: list of texts to process.
         Preferably aligned with eye-tracking data which will be used to evaluate simulations.
+        :param text_ids: list of text_ids to process. If none, it will be range(0,len(texts)).
         :param task_name: the task name.
         :param nr_of_sims: how many times the model should read the give text(s).
         :param output_filepath: filepath to save the processed text.
@@ -539,7 +540,7 @@ class ReadingModel:
 
         print(f'\nRunning simulations...')
 
-        output = list()
+        output = dict()
         start_time = time.perf_counter()
 
         if verbose: print("Task: " + task_name)
@@ -551,22 +552,25 @@ class ReadingModel:
 
         if task_name == 'reading':
             task = task_attributes.TaskAttributes(task_name, **kwargs)
-            for simulation_id in range(nr_of_sims):
-                simulation_output = []
-                for text_id, text in enumerate(texts):
-                    text_tokens = [pre_process_string(token) for token in text.split(' ')]
-                    text_tokens = [token for token in text_tokens if token != '']
+
+            for simulation_id in range(1, nr_of_sims+1):
+                simulation_output = dict()
+                if text_ids is None: text_ids = range(1, len(texts)+1)
+
+                for text_id, text in zip(text_ids, texts):
+                    text_tokens = [pre_process_string(token) for token in text.split(' ') if pre_process_string(token) != '']
                     text_output = read_sequence(self,
                                                 task,
+                                                text,
                                                 text_tokens,
                                                 text_id,
                                                 verbose=verbose)
-                    simulation_output.append(text_output)
+                    simulation_output[text_id] = text_output
                     # if filepath is given to save output, save output as the model finishes reading a text
                     if output_filepath:
                         write_out_simulation_data(text_output, output_filepath, simulation_id = simulation_id, text_id = text_id)
                 # save output of each simulation
-                output.append(simulation_output)
+                output[simulation_id] = simulation_output
 
         elif task_name == 'embedded_words':
             task = task_attributes.EmbeddedWords(task_name, **kwargs)

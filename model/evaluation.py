@@ -61,21 +61,17 @@ def eval_stats(x,y):
     :param y: true word measure
     :return: dict with metrics scores (RMSE, Pearson correlation, simulated mean, simulated standard deviation, true mean, true standard deviation)
     """
+    assert x.shape == y.shape
+    assert not np.isnan(x).any() and not np.isnan(y).any()
 
     rmse = np.sqrt(((x-y) ** 2).mean())
     corr = np.corrcoef(x, y)[0, 1]
+
     # print(f"\n RMSE={rmse}, mean_pred={np.mean(x)}, mean_true={np.mean(y)}, std_pred={np.std(x)}, std_true={np.std(y)}, corr={corr}\n")
+
     return {
         "RMSE": rmse,
         "corr": corr}
-
-def clean_word(word: str):
-    """
-    Clean a word by removing non-alphanumeric characters and converting to lowercase.
-    :param word: The word to clean.
-    :return: The cleaned word.
-    """
-    return re.sub(r"[^a-zA-Z0-9]", "", word).lower()
 
 def aggregate_and_align(eye_data:pd.DataFrame,
                         sim_data:pd.DataFrame,
@@ -83,7 +79,8 @@ def aggregate_and_align(eye_data:pd.DataFrame,
                         text_id:int,
                         stat_labels:list[str],
                         word_level_id_label:str,
-                        word_content_label:str):
+                        word_content_label:str,
+                        text_id_label:str):
 
     """
     Aggregate eye-tracking data over participants for a specific text and align it with the simulated data from the model based on word IDs and word forms.
@@ -129,9 +126,21 @@ def aggregate_and_align(eye_data:pd.DataFrame,
     eye_data = eye_data.groupby(word_level_id_label).agg(agg_param).reset_index()
     # print(eye_data.groupby("IA_ID")["IA_LABEL"].nunique().max()) # will print 1 if one word form per word id in the corpus, to check if keeping the first word form per word id is okay
 
+    # remove row with punctuation as word (text id 36, word "?"), because it is not in simulation
+    if corpus_name == 'provo' and text_id == 36:
+        eye_data = eye_data[eye_data[word_content_label]!="? "].reset_index()
+
     # check if words in eye-tracking data and simulated data are the same
-    assert [clean_word(w) for w in eye_data[word_content_label]] == [clean_word(w) for w in sim_data[
-        'word']], f"Words do not match: {eye_data[word_content_label]} vs {sim_data['word']}"
+    eye_words = [pre_process_string(w) for w in eye_data[word_content_label] if pre_process_string(w) != '']
+    sim_words = sim_data['word'].tolist()
+    assert eye_words == sim_words, (f"Words do not match in text id {text_id}: \n"
+                                       f"{eye_words} \n"
+                                       f"{sim_words}")
+
+    assert len(sim_data) == len(eye_data), \
+        (f'Simulated data and eye-tracking data from text {text_id} not the same length (sim: {len(sim_data)} != eye-tracking: {len(eye_data)})\n'
+         f'{sim_data["word"].tolist()}\n'
+         f'{eye_data[word_content_label].tolist()}\n')
 
     sim_data['word_id'] = eye_data[word_level_id_label]
 
@@ -153,7 +162,7 @@ def compute_recognition_accuracy(simulation_output:pd.DataFrame):
 
     return {"recognition_accuracy": accuracy}
 
-def evaluate_reading (output:list[list[list[FixationOutput]]]|str,
+def evaluate_reading (output:dict[dict[list[FixationOutput]]]|str,
                      corpus_name: Literal['provo', 'meco'] = 'provo',
                      data_filepath: str | None=None,
                      text_ids: list[int]=None,
@@ -203,53 +212,62 @@ def evaluate_reading (output:list[list[list[FixationOutput]]]|str,
     texts = extract_sentences(corpus_name, data_filepath, text_ids)
 
     # get list of tokens from each text from eye mov data
-    list_of_tokens = []
-    for text in texts:
-        text_tokens = [pre_process_string(token) for token in text.split(' ')]
-        list_of_tokens.append(text_tokens)
+    tokens = dict()
+    if text_ids is None: text_ids = range(1, len(texts) + 1) # assuming that text ids from corpus start at 1
+    for text_id, text in zip(text_ids, texts):
+        text_tokens = [pre_process_string(token) for token in text.split(' ') if pre_process_string(token) != '']
+        tokens[text_id] = text_tokens
 
     # convert fixation level output from model to word level stats
-    all_sim_word_stats = []
-    for sim_n, list_of_fixations in enumerate(output):
-        sim_word_stats = []
-        for text_id, text_fixations in enumerate(list_of_fixations):
-            text_tokens = list_of_tokens[text_id]
-            text_word_stats = fixation_to_word(text_tokens, text_fixations)
-            sim_word_stats.append(text_word_stats)
-        all_sim_word_stats.append(sim_word_stats)
+    all_sim_word_stats = dict()
+    for sim_id, fixations in output.items():
+        sim_word_stats = dict()
+        for text_id, text_fixations in fixations.items():
+            if text_id in tokens.keys(): # evaluate only the simulations on the texts there were selected from the eye-tracking data
+                text_tokens = tokens[text_id]
+                text_word_stats = fixation_to_word(text_tokens, text_fixations)
+                sim_word_stats[text_id] = text_word_stats
+        all_sim_word_stats[sim_id] = sim_word_stats
 
-   # align simulated data to eye tracking data and compute evaluation metrics
+    # align simulated data to eye tracking data and compute evaluation metrics
     df = pd.read_csv(data_filepath)
 
     if corpus_name == 'meco':
         df = df[df['lang']=='en']
 
     all_sim_word_agg_dfs = [] # save data frames for each simulation to concatenate later
-    for sim_id, simulation in enumerate(all_sim_word_stats):
 
+    for sim_id, simulation in all_sim_word_stats.items():
         agg_sim, agg_eye_track = [], [] # save data frames for each text to concatenate later
-        for (text_id, sim_data) in zip(text_ids, simulation):
+
+        for text_id, sim_data in simulation.items():
             # for each word measure, aggregate eye-tracking data over participants (by mean)
-            eye_data = deepcopy(df[df[text_level_id_label]==text_id])
-            # normally WordLevelStatistics aggregates a word value across simulations, but here it just returns the same word value in a different format (no aggregation across simulations)
-            # bcs we want to be able to evaluate each simulation against the eye-tracking data averaged over participants.
-            sim_data_wls = [WordLevelStatistics([word]) for word in sim_data]
-            for wls, word in zip(sim_data_wls, sim_data):
-                wls.recognized_word_at_position = word.recognized_word_at_position
-            sim_data = to_dataframe(sim_data_wls)
-            eye_data, sim_data = aggregate_and_align(eye_data,
-                                                     sim_data,
-                                                     corpus_name,
-                                                     text_id,
-                                                     eye_mov_measures,
-                                                     word_level_id_label,
-                                                     word_content_label)
-            sim_data["text_id"] = text_id
-            sim_data["simulation_id"] = [sim_id for _ in range(len(sim_data))]
-            eye_data = match_eye_to_sim_columns(eye_data, corpus_name)
-            agg_sim.append(sim_data)
-            eye_data["text_id"] = text_id
-            agg_eye_track.append(eye_data)
+            # if text id in simulation also in eye-tracking data
+            if text_id in df[text_level_id_label].unique():
+                eye_data = deepcopy(df[df[text_level_id_label]==text_id])
+                # normally WordLevelStatistics aggregates a word value across simulations, but here it just returns the same word value in a different format (no aggregation across simulations)
+                # bcs we want to be able to evaluate each simulation against the eye-tracking data averaged over participants.
+                sim_data_wls = [WordLevelStatistics([word]) for word in sim_data]
+
+                for wls, word in zip(sim_data_wls, sim_data):
+                    wls.recognized_word_at_position = word.recognized_word_at_position
+
+                sim_data = to_dataframe(sim_data_wls)
+
+                eye_data, sim_data = aggregate_and_align(eye_data,
+                                                         sim_data,
+                                                         corpus_name,
+                                                         text_id,
+                                                         eye_mov_measures,
+                                                         word_level_id_label,
+                                                         word_content_label,
+                                                         text_level_id_label)
+                sim_data["text_id"] = [text_id for _ in range(len(sim_data))]
+                sim_data["simulation_id"] = [sim_id for _ in range(len(sim_data))]
+                eye_data = match_eye_to_sim_columns(eye_data, corpus_name)
+                agg_sim.append(sim_data)
+                eye_data["text_id"] = [text_id for _ in range(len(eye_data))]
+                agg_eye_track.append(eye_data)
 
         sim_df = pd.concat(agg_sim, axis=0, ignore_index=True)
         eye_df = pd.concat(agg_eye_track, axis=0, ignore_index=True)
@@ -311,7 +329,3 @@ def evaluate_lex_decis(output, filename):
     print(output.groupby('cond')['av. tot'].mean())
     print(output.groupby('cond')['word_evidence'].mean())
     output.to_csv(filename)
-
-# evaluate_reading(output="../data/model_output/_10_14_12-24-38/example_simulation.csv",
-#                  corpus_name='provo',
-#                  text_ids=[1])
