@@ -7,7 +7,7 @@ import pandas as pd
 
 from reading_helper_functions import get_blank_screen_stimulus, string_to_ngrams, cal_ngram_exc_input, is_similar_word_length, \
     get_midword_position_for_surrounding_word, calc_word_attention_right, calc_saccade_error, define_slot_matching_order, \
-    find_word_edges, sample_from_norm_distribution, span_match, suppress_ngram_activation
+    find_word_edges, sample_from_norm_distribution, span_match, suppress_ngram_activation, frame_mu_scale, kernel_cosine, kernel_laplace
 
 logger = logging.getLogger(__name__)
 
@@ -328,9 +328,9 @@ def evoke_frame(new_recognized_words, text_frames, verbose=False):
                 evoked_frames[recognized_word] = word_frames
 
         if evoked_frames:
-            logger.info('Evoked frames: ', evoked_frames)
+            logger.info(f'Evoked frames: {evoked_frames}')
             if verbose:
-                print('Evoked frames: ', evoked_frames)
+                print(f'Evoked frames: {evoked_frames}')
 
         return evoked_frames
 
@@ -736,7 +736,8 @@ class FixationOutput:
                  recognition_cycle:int=-1,
                  fixation_duration:int=0,
                  recognized_words:np.ndarray=None,
-                 recognized_word:str=''
+                 recognized_word:str='',
+                 start_shift:int=-1
                  ):
 
         """
@@ -765,12 +766,13 @@ class FixationOutput:
         self.saccade_cause = saccade_cause
         self.recognition_cycle = recognition_cycle
         self.fixation_duration = fixation_duration
+        self.att_shift_cycle = start_shift
         self.recognized_word = recognized_word
         self.recognized_words = recognized_words
         self.fixated_word = reader.tokens[fixation] if reader is not None else None
         self.fixated_word_length = len(self.fixated_word) if self.fixated_word is not None else 0
         self.fixated_word_frequency = reader.model.frequency_values[reader.tokens[self.fixation]] if reader and reader.model.frequency_values and reader.tokens[fixation] in reader.model.frequency_values.keys() else 0
-        self.fixated_word_predictability = reader.text_predictions[str(fixation)][reader.tokens[fixation]] if reader and reader.text_predictions and str(fixation) in reader.text_predictions.keys() and reader.tokens[self.fixation] in reader.text_predictions[str(fixation)].keys() else 0
+        self.fixated_word_predictability = round(reader.text_predictions[str(fixation)]["predictions"][reader.tokens[fixation]],3) if reader and reader.text_predictions and str(fixation) in reader.text_predictions.keys() and reader.tokens[self.fixation] in reader.text_predictions[str(fixation)]["predictions"].keys() else 0
 
     def to_dict(self):
 
@@ -794,6 +796,7 @@ class FixationOutput:
             'recognition_cycle': self.recognition_cycle,
             'recognized_words': self.recognized_words,
             'recognized_word': self.recognized_word,
+            'att_shift_cycle': self.att_shift_cycle,
             'fixation_duration': self.fixation_duration,
         }
 
@@ -817,6 +820,7 @@ class FixationOutput:
         self.recognition_cycle = data['recognition_cycle']
         self.recognized_words = data['recognized_words']
         self.recognized_word = data['recognized_word']
+        self.att_shift_cycle = data['att_shift_cycle']
         self.fixation_duration = data['fixation_duration']
         return self
 
@@ -844,6 +848,8 @@ class FixationProcessor:
         self.attention_shift = False  # whether attention has shifted to another location (e.g. somewhere in the next word)
         self.n_cycles_since_attent_shift = 0  # number of cycles since attention shifted
         self.n_cycles = 0  # total number of cycles in the fixation
+        self.total_cycles = 0  # cycles since the start of reading
+        self.frame_onset_cycle = None  # total_cycles value at which the latest frame was evoked
         self.recognition_in_stimulus = []  # stimulus position in which recognition is achieved during current fixation
         self.word_edges = dict() # the position of word edges in the stimulus
         self.lexicon_word_activity = np.zeros((len(reader.model.lexicon)), dtype=float)  # word activity for words in lexicon
@@ -919,6 +925,8 @@ class FixationProcessor:
                                      stimulus=self.stimulus,
                                      fixation=self.fixation,
                                      fixated_word_threshold = self.reader.model.recognition_thresholds[fixated_word_index])
+        frame_cycle = -1
+        recognized_flag = False
 
         # ---------------------- Define word excitatory input ---------------------
         n_ngrams, total_ngram_activity, word_input = compute_words_input(stimulus=self.stimulus,
@@ -989,11 +997,18 @@ class FixationProcessor:
             # ---------------------- Evoke frames ---------------------
             new_recognized_words = set(self.recognized_word_at_position).difference(set(prev_recog_words))
             if new_recognized_words and self.reader.model.frames: # if a new word got recognized and the model has access to frames
-                # print('Newly recognized word positions: ', new_recognized_positions)
                 logger.info(f'Newly recognized words: {new_recognized_words}')
+                if verbose:
+                    print(f'Newly recognized words: {new_recognized_words}')
                 evoked_frames = evoke_frame(new_recognized_words,
                                             self.reader.model.frames[self.reader.text_id-1],
                                             verbose=verbose)
+                if evoked_frames:
+                    frame_cycle = self.n_cycles
+                    self.frame_onset_cycle = self.total_cycles
+                    logger.info(f'Frame evoked at cycle {frame_cycle}')
+                    if verbose:
+                        print(f'Frame evoked at cycle {frame_cycle}')
 
             # ---------------------- Pre-activate predicted words in the stimulus ---------------------
             if self.fixation < len(self.reader.tokens)-1 and self.reader.model.predictability_values:
@@ -1012,22 +1027,31 @@ class FixationProcessor:
                                                                                                         pred_bool=self.predicted)
 
             # ---------------------- Make saccade decisions ---------------------
+            #  double exponential distribution: mu starts to increase once frame is evoked for a period of time, until it reaches a peak and then starts to decay until it is back to normal again (across fixations).
             # word selection and attention shift
             if not self.attention_shift:
                 # MM: on every cycle, take sample (called shift_start) out of normal distrib.
                 # If cycle since fixstart > sample, make attentshift. This produces approx ex-gauss SRT
                 if self.recognized_word_at_position[self.fixation]:
                     recognized_flag = True
-                else:
-                    recognized_flag = False
-                shift_start = sample_from_norm_distribution(self.reader.model.mu,
-                                                            self.reader.model.sigma,
-                                                            self.reader.model.recognition_speeding,
-                                                            recognized=recognized_flag) # increase mu over some cycles (a decay function or x cycles) (cognitive load = taking longer to shift att) 300 ms?
+
+                cycles_since_frame = (None if self.frame_onset_cycle is None
+                                      else self.total_cycles - self.frame_onset_cycle)
+
+                mu_scaled = self.reader.model.mu * frame_mu_scale(cycles_since_frame)
+                # mu_scaled = self.reader.model.mu * kernel_laplace(cycles_since_frame)
+                # mu_scaled = self.reader.model.mu * kernel_laplace(cycles_since_frame)
+
+                shift_start = sample_from_norm_distribution(mu=mu_scaled, # self.reader.model.mu
+                                                            sigma=self.reader.model.sigma,
+                                                            recog_speeding=self.reader.model.recognition_speeding,
+                                                            recognized=recognized_flag)
+
                 # shift attention (& plan saccade in 125 ms) if n_cycles is higher than random threshold shift_start
                 if self.n_cycles >= shift_start:
 
                     self.attention_shift = True
+                    self.output.att_shift_cycle = self.n_cycles
                     # recompute attention position because attention has shifted
                     self.attention_position = compute_next_attention_position(reader_output=reader_output,
                                                                          tokens=self.reader.tokens,
@@ -1071,6 +1095,7 @@ class FixationProcessor:
                         self.output.recognition_cycle = self.recognized_word_at_cycle[self.fixation]
 
             self.n_cycles += 1
+            self.total_cycles += 1
 
         # ------- Out of cycle loop. After last cycle, register fixation output for fixated word before eye move is made -------
         self.output.recognized_words=[word for word in self.recognized_word_at_position.copy()]

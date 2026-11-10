@@ -187,6 +187,82 @@ def define_slot_matching_order(n_words_in_stim:int, fixated_position_stimulus:in
 
     return order_match_check
 
+def kernel_cosine(t, T=60.0, peak_weight=1.2):
+    """Smooth symmetric bump: 0 at t=0, peak at T/2, back to 0 at t=T."""
+    if t is None or t < 0 or t > T:
+        return 1.0
+    k = 0.5 * (1 - np.cos(2 * np.pi * t / T))
+    return 1.0 + (peak_weight - 1.0) * k
+
+def kernel_laplace(t, t_peak=10.0, b=6.0, peak_weight=1.2):
+    """Symmetric rise/decay around t_peak; exactly 0 at t=0 and at t=2*t_peak."""
+    if t is None or t < 0 or t > 2 * t_peak:
+        return 1.0
+    e0 = np.exp(-t_peak / b)
+    k = (np.exp(-abs(t - t_peak) / b) - e0) / (1 - e0)
+    return 1.0 + (peak_weight - 1.0) * k
+
+def frame_mu_scale(cycles_since_frame, tau_rise=3.0, tau_decay=12.0,
+                   peak_weight=1.2, cutoff=0.01):
+    """
+    Double exponential scaling of mu after a frame is evoked.
+
+    :param cycles_since_frame: cycles elapsed since the frame was evoked (None if no frame yet).
+    :param tau_rise: time constant (cycles) of the rise. Must be < tau_decay.
+    :param tau_decay: time constant (cycles) of the decay.
+    :param peak_weight: scaling of mu at the peak (1.2 = mu is 20% larger at the peak).
+    :param cutoff: below this fraction of the peak boost, the effect is set to exactly 0.
+    :return: factor to multiply mu with (1.0 = no effect).
+    """
+
+    # tau is the temporal metric for how quickly a system reaches a steady state (rate of change is 0) and returns to rest
+    # tau rise and decay set where the peak falls and for how long the effect lasts.
+    # higher tau decay means longer effect, while higher tau rise means smoother onset.
+    # default values will give a peak after 6 cycles
+
+    if cycles_since_frame is None or cycles_since_frame < 0:
+        return 1.0
+
+    t = cycles_since_frame
+    # time of the peak determined by rise and decay constants
+    t_peak = (tau_rise * tau_decay / (tau_decay - tau_rise)) * np.log(tau_decay / tau_rise)
+    norm = np.exp(-t_peak / tau_decay) - np.exp(-t_peak / tau_rise)
+    k = (np.exp(-t / tau_decay) - np.exp(-t / tau_rise)) / norm
+
+    # t_end = -tau_decay * np.log(cutoff * norm)
+
+    # exponentials never reach 0, so cut the tail
+    if t > t_peak and k < cutoff:
+        k = 0.0
+
+    mu_factor = 1.0 + (peak_weight - 1.0) * k
+    # print(f'mu factor: {mu_factor}')
+
+    return mu_factor
+
+def frame_mu_scale_within_fix(mu, frame_cycle, current_cycle):
+
+    max_x_cycles = 8 # 8 = 200 ms # 12 = 300 ms
+    # boost: mu increases this much for a max of x cycles after frame is evoked, so attention takes longer to shift
+    mu_frame_weight = 1.2 # 1.5
+    # if frame_cycle > -1:
+    #     print(f'Current cycle: {current_cycle}, frame evoked at cycle: {frame_cycle}')
+    #     print(current_cycle - frame_cycle)
+    #     print((current_cycle - frame_cycle) <= max_x_cycles)
+    #     exit()
+    if frame_cycle > -1:
+        elapsed = current_cycle - frame_cycle
+        if 0 <= elapsed <= max_x_cycles:
+            mu *= mu_frame_weight
+            # # steepness; higher = faster initial drop
+            # k = 3
+            # # exponential decay: boost (mu_frame_weight) shrinks faster at first
+            # decay = (np.exp(-k * elapsed / max_x_cycles) - np.exp(-k)) / (1 - np.exp(-k))
+            # # scale boost (mu_frame_weight) by a factor that goes from 1 at elapsed = 0 to 0 at elapsed = max_n_cycles
+            # mu = mu * (1 + (mu_frame_weight - 1) * decay)
+            logger.info(f'mu increased to {mu}')
+    return mu
+
 def sample_from_norm_distribution(mu:float, sigma:float, recog_speeding:float, recognized:bool)->int:
 
     """
@@ -199,7 +275,6 @@ def sample_from_norm_distribution(mu:float, sigma:float, recog_speeding:float, r
 
     :return: starting from which processing cycle attention should shift.
     """
-
     if recognized:
         return int(np.round(np.random.normal(mu - recog_speeding, sigma, 1)))
     else:

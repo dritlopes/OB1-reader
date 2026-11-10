@@ -8,6 +8,7 @@ from model_components import FixationOutput
 from utils import pre_process_string, extract_sentences
 import re
 import warnings
+import os
 
 def to_dataframe(sim_word_stats: list[WordLevelStatistics]):
 
@@ -166,9 +167,7 @@ def evaluate_reading (output:dict[dict[list[FixationOutput]]]|str,
                      corpus_name: Literal['provo', 'meco'] = 'provo',
                      data_filepath: str | None=None,
                      text_ids: list[int]=None,
-                     eval_output_path = "../data/eval_output/eval_results.csv",
-                     word_sim_output_path="../data/eval_output/agg_simulation.csv",
-                     word_eye_output_path="../data/eval_output/agg_eye_tracking.csv",):
+                     eval_output_path = "../data/eval_output/eval_results.csv"):
 
     """
     Evaluate reading performance based on eye-tracking data and simulated data.
@@ -177,10 +176,10 @@ def evaluate_reading (output:dict[dict[list[FixationOutput]]]|str,
     :param data_filepath: eye-tracking data file path. If None, default paths will be used for the specified corpus (meco or provo).
     :param text_ids: Specify which text ids from eye-tracking corpus were used for simulations if not all. If None, all texts will be used.
     :param eval_output_path: Path to save evaluation metrics results. Default is "../data/eval_output/eval_results.csv".
-    :param word_sim_output_path: Path to save word-level model output. Default is "../data/eval_output/agg_simulation.csv".
-    :param word_eye_output_path: Path to save word-level eye-tracking data averaged over participants. Default is "../data/eval_output/agg_eye_tracking.csv".
     :return:
     """
+
+    os.makedirs(os.path.dirname(eval_output_path), exist_ok=True)
 
     if corpus_name == 'provo':
         if data_filepath is None:
@@ -272,7 +271,7 @@ def evaluate_reading (output:dict[dict[list[FixationOutput]]]|str,
         sim_df = pd.concat(agg_sim, axis=0, ignore_index=True)
         eye_df = pd.concat(agg_eye_track, axis=0, ignore_index=True)
         eye_df = eye_df[["text_id","word_id","word",*simulation_measures]]
-        eye_df.to_csv(word_eye_output_path)
+        eye_df.to_csv(eval_output_path.replace('.csv','agg_eye_tracking.csv'))
         # save simulation level aggregated data to list for later concatenation
         all_sim_word_agg_dfs.append(sim_df)
 
@@ -280,7 +279,7 @@ def evaluate_reading (output:dict[dict[list[FixationOutput]]]|str,
     # res_df.to_csv(eval_output_path)
     sim_df = pd.concat(all_sim_word_agg_dfs, axis=0, ignore_index=True)
     sim_df = sim_df[["simulation_id","text_id","word_id","word",*simulation_measures, "recognized_word_at_position"]]
-    sim_df.to_csv(word_sim_output_path)
+    sim_df.to_csv(eval_output_path.replace('.csv', '_agg_simulation.csv'))
 
     # compute eval metrics per simulation and per text
     eval_results_per_sim, eval_results_per_text, recog_acc_per_text = [], [], []

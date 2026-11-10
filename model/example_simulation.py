@@ -5,7 +5,7 @@ from utils import extract_sentences, extract_stimuli
 from evaluation import evaluate_reading, evaluate_lex_decis
 import task_attributes
 
-text_ids = [1] # range(1,56) # text ids from corpus/stimuli list
+text_ids = [1,2,3,4,5] # range(1,56) # text ids from corpus/stimuli list
 trials = []
 task_name = 'reading' #'reading', 'flanker'
 dataset_name = "provo" # "ziaka25expt1_stim.csv" # meco
@@ -33,20 +33,21 @@ model = ReadingModel(texts=texts,
                      use_predictability=True,  # switch on predictability-based pre-activation
                      predictability_filepath="../data/processed/prediction_map_Provo_Corpus_gpt2_continuous_reading_english_topkall_0.01.json",
                      frequency_filepath='../data/processed/frequency_map_english.json',
-                     # frame_filepath='../data/raw/output_FAST.gemma4-31b.json',  # switch on frame-based activation,:
+                     frame_filepath='../data/raw/output_FAST.gemma4-31b.json',  # switch on frame-based activation
                      ngram_gap=0,
                      verbose=True)
 
 # run reading simulation
 output: list[list[list[FixationOutput]]] = model.read(output_filepath=f'../data/model_output/{model.time}/example_simulation.csv',
                                                       task_name=task_name,
-                                                      nr_of_sims=1,
+                                                      nr_of_sims=5,
                                                       trials=trials,
                                                       text_ids=text_ids,
-                                                      verbose=True)
+                                                      verbose=False)
 
 # evaluate model output
 if task_name== 'reading':
-    evaluate_reading(output, dataset_name, text_ids=text_ids)
+    evaluate_reading(output, dataset_name, text_ids=text_ids,
+                     eval_output_path=f"../data/eval_output/{model.time}/eval_results.csv")
 elif task_name== 'lex_decis':
     evaluate_lex_decis(output, f'../data/model_output/flanker_sim{model.time}.csv')
